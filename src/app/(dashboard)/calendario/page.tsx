@@ -26,7 +26,7 @@ type OS = {
   data_agendamento: string;
   valor_total: number;
   cliente: { nome: string };
-  tecnico: { nome: string };
+  tecnico: { id: string; nome: string };
 };
 
 export default function CalendarioPage() {
@@ -57,7 +57,7 @@ export default function CalendarioPage() {
       .select(`
         id, status, tipo_servico, data_agendamento, valor_total,
         cliente:clientes(nome),
-        tecnico:funcionarios(nome)
+        tecnico:funcionarios(id, nome)
       `)
       .in('status', ['os_ativa', 'os_finalizada'])
       .not('data_agendamento', 'is', null)

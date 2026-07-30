@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ArrowUpCircle, ArrowDownCircle, Plus, Trash2, Wallet, TrendingUp, TrendingDown, Filter } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import format from 'date-fns/format';
-import ptBR from 'date-fns/locale/pt-BR';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 type Movimentacao = {
   id: string;
