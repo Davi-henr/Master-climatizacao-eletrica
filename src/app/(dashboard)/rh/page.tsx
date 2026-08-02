@@ -201,6 +201,8 @@ export default function RHPage() {
     }
   };
 
+  const selectedFuncRender = funcionarios.find(f => f.id === funcId);
+
   return (
     <div className="space-y-6 pb-24">
       <PageHeader title="Equipe / Pagamentos" subtitle="Lançamento de diárias e emissão de recibos" />
@@ -217,6 +219,21 @@ export default function RHPage() {
               <option key={f.id} value={f.id}>{f.nome} (Diária: R$ {f.valor_diaria})</option>
             ))}
           </select>
+          {selectedFuncRender?.chave_pix && (
+            <div className="mt-2 text-sm text-brand-blue font-bold bg-blue-50 p-2 rounded-lg border border-blue-100 flex justify-between items-center">
+              <span>Chave PIX: {selectedFuncRender.chave_pix}</span>
+              <button 
+                type="button" 
+                onClick={() => {
+                  navigator.clipboard.writeText(selectedFuncRender.chave_pix);
+                  alert('Chave PIX copiada!');
+                }}
+                className="text-xs bg-white px-2 py-1 rounded shadow-sm hover:bg-slate-50 transition-colors border border-blue-200"
+              >
+                Copiar
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

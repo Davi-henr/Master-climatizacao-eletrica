@@ -248,7 +248,9 @@ export default function OrcamentosPage() {
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-bold text-slate-800">{orcamento.cliente?.nome || 'Sem cliente'}</h3>
-                  <p className="text-xs text-slate-500">{orcamento.equipamento?.descricao || 'Sem equipamento'}</p>
+                  <p className="text-xs text-slate-500">
+                    {Array.from(new Set(orcamento.itens.filter((i:any) => i.equipamento).map((i:any) => i.equipamento.descricao))).join(', ') || 'Geral / Sem equipamento'}
+                  </p>
                 </div>
                 {getStatusBadge(orcamento.status)}
               </div>

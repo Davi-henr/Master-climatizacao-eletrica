@@ -23,7 +23,7 @@ export default function CadastrosPage() {
   const [novoCliente, setNovoCliente] = useState({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '' });
   const [equipamentosCliente, setEquipamentosCliente] = useState<any[]>([{ descricao: '', local: '' }]);
   
-  const [novoFuncionario, setNovoFuncionario] = useState({ nome: '', cargo: '', valor_diaria: '' });
+  const [novoFuncionario, setNovoFuncionario] = useState({ nome: '', cargo: '', valor_diaria: '', chave_pix: '' });
   const [novoServico, setNovoServico] = useState({ nome_item: '', tipo: 'mao_de_obra', valor_padrao: '' });
 
   const formatPhone = (val: string) => {
@@ -112,7 +112,7 @@ export default function CadastrosPage() {
 
   const handleEditFuncionario = (f: any) => {
     setEditingFuncionarioId(f.id);
-    setNovoFuncionario({ nome: f.nome, cargo: f.cargo, valor_diaria: String(f.valor_diaria) });
+    setNovoFuncionario({ nome: f.nome, cargo: f.cargo, valor_diaria: String(f.valor_diaria), chave_pix: f.chave_pix || '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -130,7 +130,7 @@ export default function CadastrosPage() {
     }
     
     setEditingFuncionarioId(null);
-    setNovoFuncionario({ nome: '', cargo: '', valor_diaria: '' });
+    setNovoFuncionario({ nome: '', cargo: '', valor_diaria: '', chave_pix: '' });
     fetchData();
   };
 
@@ -330,12 +330,13 @@ export default function CadastrosPage() {
                   {editingFuncionarioId ? 'Editar Funcionário' : 'Novo Funcionário'}
                 </h3>
                 {editingFuncionarioId && (
-                  <button type="button" onClick={() => { setEditingFuncionarioId(null); setNovoFuncionario({nome:'', cargo:'', valor_diaria:''})}} className="text-sm text-slate-500 underline">Cancelar Edição</button>
+                  <button type="button" onClick={() => { setEditingFuncionarioId(null); setNovoFuncionario({nome:'', cargo:'', valor_diaria:'', chave_pix:''})}} className="text-sm text-slate-500 underline">Cancelar Edição</button>
                 )}
               </div>
 
-              <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input type="text" required placeholder="Nome" value={novoFuncionario.nome} onChange={e => setNovoFuncionario({...novoFuncionario, nome: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                <input type="text" placeholder="Chave PIX (Opcional)" value={novoFuncionario.chave_pix} onChange={e => setNovoFuncionario({...novoFuncionario, chave_pix: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <input type="text" required placeholder="Cargo (Ex: Técnico)" value={novoFuncionario.cargo} onChange={e => setNovoFuncionario({...novoFuncionario, cargo: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
@@ -355,6 +356,7 @@ export default function CadastrosPage() {
                       <div>
                         <p className="font-bold text-slate-800">{f.nome}</p>
                         <p className="text-sm text-slate-500">{f.cargo}</p>
+                        {f.chave_pix && <p className="text-xs text-brand-blue mt-1">PIX: {f.chave_pix}</p>}
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="font-bold text-brand-orange mr-2">R$ {f.valor_diaria}</span>
