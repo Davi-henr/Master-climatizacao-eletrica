@@ -150,12 +150,28 @@ export default function DashboardPage() {
       // Limpezas Concluídas
       const { data: limpezas } = await supabase
         .from('orcamentos_os')
-        .select('id, data_agendamento, cliente:clientes(nome), itens_os(equipamentos(descricao, local))')
+        .select('id, data_agendamento, cliente:clientes(nome), itens_os(equipamentos(id, descricao, local))')
         .eq('tipo_servico', 'Limpeza')
         .eq('status', 'os_finalizada')
-        .order('data_agendamento', { ascending: false })
-        .limit(10);
-      if (limpezas) setLimpezasConcluidas(limpezas);
+        .order('data_agendamento', { ascending: false });
+        
+      if (limpezas) {
+        // Filtrar apenas o registro mais recente por equipamento
+        const latestPerEquip = new Map();
+        limpezas.forEach((lz: any) => {
+          lz.itens_os?.forEach((item: any) => {
+            if (item.equipamentos?.id) {
+              const eqId = item.equipamentos.id;
+              if (!latestPerEquip.has(eqId)) {
+                latestPerEquip.set(eqId, lz);
+              }
+            }
+          });
+        });
+        // Converta para array e pegue os últimos 10
+        const uniqueLimpezas = Array.from(latestPerEquip.values()).slice(0, 10);
+        setLimpezasConcluidas(uniqueLimpezas);
+      }
 
       // Últimas 5 Movimentações Financeiras
       const { data: movs } = await supabase
@@ -265,11 +281,16 @@ export default function DashboardPage() {
             {planejamentoSemana.map(os => {
               const cli = Array.isArray(os.cliente) ? os.cliente[0] : os.cliente;
               const equipamentos = os.itens_os?.filter((i:any)=>i.equipamentos).map((i:any)=>i.equipamentos) || [];
+              const dataAgendamentoObj = new Date(os.data_agendamento);
+              const isAtrasado = dataAgendamentoObj.getTime() < new Date().getTime();
               
               return (
-              <div key={os.id} className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-brand-blue border-y border-r border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+              <div key={os.id} className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 ${isAtrasado ? 'border-l-red-500' : 'border-l-brand-blue'} border-y border-r border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-3`}>
                 <div className="flex-1">
-                  <h4 className="font-bold text-slate-800 text-sm">{cli?.nome}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-slate-800 text-sm">{cli?.nome}</h4>
+                    {isAtrasado && <span className="bg-red-100 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Atrasado</span>}
+                  </div>
                   
                   {cli?.endereco && (
                     <p className="text-xs text-slate-500 mt-0.5">{cli.endereco}</p>
@@ -285,8 +306,8 @@ export default function DashboardPage() {
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-brand-blue mt-2 bg-blue-50 w-fit px-2 py-1 rounded-lg border border-blue-100">
-                    <Clock size={12} /> {format(parseISO(os.data_agendamento), 'dd/MM/yyyy HH:mm')}
+                  <div className={`flex items-center gap-1.5 text-xs font-bold mt-2 w-fit px-2 py-1 rounded-lg border ${isAtrasado ? 'bg-red-50 text-red-600 border-red-100' : 'text-brand-blue bg-blue-50 border-blue-100'}`}>
+                    <Clock size={12} /> {format(dataAgendamentoObj, 'dd/MM/yyyy HH:mm')}
                   </div>
                 </div>
                 <div className="self-end sm:self-center">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { Plus, Search, CheckCircle, Clock, CalendarDays, X, Trash2, Edit, Filter, MessageCircle } from 'lucide-react';
+import { Plus, Search, CheckCircle, Clock, CalendarDays, X, Trash2, Edit, Filter, MessageCircle, RotateCcw } from 'lucide-react';
 import PDFDownloadButton from '@/components/PDFDownloadButton';
 import PageHeader from '@/components/PageHeader';
 
@@ -122,6 +122,24 @@ export default function OrcamentosPage() {
     } catch (error) {
       console.error('Erro ao excluir:', error);
       alert('Erro ao excluir orçamento.');
+    }
+  };
+
+  const handleReverterStatus = async (id: string, currentStatus: string) => {
+    let newStatus = '';
+    if (currentStatus === 'os_finalizada') newStatus = 'os_ativa';
+    else if (currentStatus === 'os_ativa') newStatus = 'orcamento_pendente';
+    else return;
+
+    if (!confirm(`Deseja desfazer o status deste registro e voltar para ${newStatus === 'os_ativa' ? 'Agendado' : 'Pendente'}?`)) return;
+    
+    try {
+      const { error } = await supabase.from('orcamentos_os').update({ status: newStatus }).eq('id', id);
+      if (error) throw error;
+      fetchOrcamentos();
+    } catch (error) {
+      console.error('Erro ao reverter:', error);
+      alert('Erro ao alterar status.');
     }
   };
 
@@ -258,9 +276,21 @@ export default function OrcamentosPage() {
                     <button 
                       onClick={() => handleExcluir(orcamento.id)}
                       className="p-2 border border-red-200 text-red-500 rounded-lg hover:bg-red-50 flex items-center justify-center"
-                      title="Excluir Orçamento"
+                      title="Excluir Orçamento permanentemente"
                     >
                       <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+
+                {orcamento.status !== 'orcamento_pendente' && (
+                  <div className="flex flex-col sm:flex-row gap-2 w-full mt-2 sm:mt-0 justify-end">
+                    <button 
+                      onClick={() => handleReverterStatus(orcamento.id, orcamento.status)}
+                      className="px-4 py-2 border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 flex items-center justify-center gap-2 text-sm font-bold"
+                      title="Desfazer Status"
+                    >
+                      <RotateCcw size={16} /> Voltar para {orcamento.status === 'os_finalizada' ? 'Agendado' : 'Pendente'}
                     </button>
                   </div>
                 )}
