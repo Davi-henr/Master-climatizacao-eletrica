@@ -14,6 +14,7 @@ type Orcamento = {
   tipo_servico: string;
   status: string;
   valor_total: number;
+  valor_desconto?: number;
   created_at: string;
   itens: any[];
 };
@@ -50,6 +51,7 @@ export default function OrcamentosPage() {
           status,
           tipo_servico,
           valor_total,
+          valor_desconto,
           created_at,
           cliente:clientes(nome, telefone_whatsapp),
           itens:itens_os(

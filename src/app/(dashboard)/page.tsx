@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { TrendingUp, FileText, CalendarDays, Wallet, CheckCircle, Clock, Eye } from 'lucide-react';
+import { TrendingUp, FileText, CalendarDays, Wallet, CheckCircle, Clock, Eye, MapPin, X } from 'lucide-react';
 import Link from 'next/link';
 import { format, isThisWeek, parseISO } from 'date-fns';
 import PageHeader from '@/components/PageHeader';
@@ -90,6 +90,10 @@ export default function DashboardPage() {
   const [meusPagamentos, setMeusPagamentos] = useState<any[]>([]);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Modal Rota
+  const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
+  const [selectedForRoute, setSelectedForRoute] = useState<string[]>([]);
 
   useEffect(() => {
     const cookies = document.cookie.split(';');
@@ -201,7 +205,7 @@ export default function DashboardPage() {
     // Planejamento da Semana (OS Ativas ordenadas por data com urgência)
     const { data: ativasData } = await supabase
       .from('orcamentos_os')
-      .select('id, data_agendamento, urgencia, cliente:clientes(nome, endereco), itens_os(equipamentos(descricao, local))')
+      .select('id, data_agendamento, urgencia, cliente:clientes(nome, endereco, endereco_rua, endereco_numero, endereco_bairro), itens_os(equipamentos(descricao, local))')
       .eq('status', 'os_ativa')
       .order('data_agendamento', { ascending: true })
       .limit(20);
@@ -230,6 +234,41 @@ export default function DashboardPage() {
       case 'Urgente': return <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-[10px] font-bold">🟡 URGENTE</span>;
       default: return <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold">🟢 NORMAL</span>;
     }
+  };
+
+  const handleOpenGoogleMaps = (endereco: string) => {
+    if (!endereco) return;
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleGenerateCompleteRoute = () => {
+    if (selectedForRoute.length === 0) return;
+    
+    const selectedOS = planejamentoSemana.filter(os => selectedForRoute.includes(os.id));
+    
+    // Sort by urgency automatically
+    const sorted = [...selectedOS].sort((a, b) => {
+      const urgencyLevel = { 'Muito Urgente': 3, 'Urgente': 2, 'Pouco Urgente': 1 } as any;
+      const uA = urgencyLevel[a.urgencia] || 0;
+      const uB = urgencyLevel[b.urgencia] || 0;
+      return uB - uA; 
+    });
+
+    const enderecos = sorted.map(os => {
+      const cli = Array.isArray(os.cliente) ? os.cliente[0] : os.cliente;
+      return cli?.endereco_rua ? `${cli.endereco_rua}, ${cli.endereco_numero} - ${cli.endereco_bairro}` : cli?.endereco;
+    }).filter(e => e);
+
+    if (enderecos.length === 0) {
+      alert("Nenhum endereço válido selecionado nas OS escolhidas.");
+      return;
+    }
+
+    const path = enderecos.map(e => encodeURIComponent(e)).join('/');
+    const url = `https://www.google.com/maps/dir/${path}`;
+    window.open(url, '_blank');
+    setIsRouteModalOpen(false);
   };
 
   return (
@@ -273,7 +312,15 @@ export default function DashboardPage() {
       <div>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-slate-800">Próximos Agendamentos</h2>
-          <Link href="/calendario" className="text-sm font-bold text-brand-orange">Ver Agenda</Link>
+          <div className="flex gap-3 items-center">
+            <button 
+              onClick={() => { setSelectedForRoute([]); setIsRouteModalOpen(true); }}
+              className="text-xs font-bold bg-brand-orange text-white px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-orange-600 transition-colors"
+            >
+              <MapPin size={14}/> Montar Rota do Dia
+            </button>
+            <Link href="/calendario" className="text-sm font-bold text-brand-orange">Ver Agenda</Link>
+          </div>
         </div>
         
         {loading ? (
@@ -298,9 +345,23 @@ export default function DashboardPage() {
                     {isAtrasado && <span className="bg-red-100 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Atrasado</span>}
                   </div>
                   
-                  {cli?.endereco && (
-                    <p className="text-xs text-slate-500 mt-0.5">{cli.endereco}</p>
-                  )}
+                  {cli?.endereco_rua ? (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <p className="text-xs text-slate-500">
+                        {cli.endereco_rua}, {cli.endereco_numero} - {cli.endereco_bairro}
+                      </p>
+                      <button onClick={() => handleOpenGoogleMaps(`${cli.endereco_rua}, ${cli.endereco_numero} - ${cli.endereco_bairro}`)} className="text-blue-500 p-1 hover:bg-blue-50 rounded" title="Abrir GPS">
+                        <MapPin size={14}/>
+                      </button>
+                    </div>
+                  ) : cli?.endereco ? (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <p className="text-xs text-slate-500">{cli.endereco}</p>
+                      <button onClick={() => handleOpenGoogleMaps(cli.endereco)} className="text-blue-500 p-1 hover:bg-blue-50 rounded" title="Abrir GPS">
+                        <MapPin size={14}/>
+                      </button>
+                    </div>
+                  ) : null}
                   
                   {equipamentos.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
@@ -492,6 +553,67 @@ export default function DashboardPage() {
         </div>
       )}
       
+      {/* Modal Rota */}
+      {isRouteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <h3 className="font-black text-slate-800">Montar Rota</h3>
+                <p className="text-xs text-slate-500">Selecione os clientes que irá atender.</p>
+              </div>
+              <button onClick={() => setIsRouteModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="p-5 max-h-[60vh] overflow-y-auto space-y-3">
+              {planejamentoSemana.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center">Nenhum agendamento encontrado.</p>
+              ) : (
+                planejamentoSemana.map(os => {
+                  const cli = Array.isArray(os.cliente) ? os.cliente[0] : os.cliente;
+                  const dataObj = new Date(os.data_agendamento);
+                  const isChecked = selectedForRoute.includes(os.id);
+                  
+                  return (
+                    <label key={os.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${isChecked ? 'bg-orange-50 border-orange-200' : 'border-slate-200 hover:bg-slate-50'}`}>
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedForRoute([...selectedForRoute, os.id]);
+                          else setSelectedForRoute(selectedForRoute.filter(id => id !== os.id));
+                        }}
+                        className="mt-1 w-4 h-4 text-brand-orange rounded border-slate-300 focus:ring-brand-orange"
+                      />
+                      <div className="flex-1">
+                        <p className="font-bold text-sm text-slate-800">{cli?.nome}</p>
+                        <p className="text-xs text-slate-500">{format(dataObj, 'dd/MM/yyyy HH:mm')}</p>
+                      </div>
+                      <div className="scale-75 origin-top-right">
+                        {getUrgencyBadge(os.urgencia)}
+                      </div>
+                    </label>
+                  )
+                })
+              )}
+            </div>
+            
+            <div className="p-5 border-t border-slate-100 bg-slate-50">
+              <button 
+                onClick={handleGenerateCompleteRoute} 
+                disabled={selectedForRoute.length === 0}
+                className="w-full py-3 bg-brand-orange text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <MapPin size={18}/> Gerar Rota Inteligente (Google Maps)
+              </button>
+              <p className="text-[10px] text-center text-slate-400 mt-3">
+                *O sistema ordenará automaticamente por urgência antes de enviar pro Maps.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

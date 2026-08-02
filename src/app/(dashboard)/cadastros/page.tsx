@@ -20,7 +20,7 @@ export default function CadastrosPage() {
   const [editingFuncionarioId, setEditingFuncionarioId] = useState<string | null>(null);
   const [editingServicoId, setEditingServicoId] = useState<string | null>(null);
 
-  const [novoCliente, setNovoCliente] = useState({ nome: '', telefone_whatsapp: '', endereco: '' });
+  const [novoCliente, setNovoCliente] = useState({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '' });
   const [equipamentosCliente, setEquipamentosCliente] = useState<any[]>([{ descricao: '', local: '' }]);
   
   const [novoFuncionario, setNovoFuncionario] = useState({ nome: '', cargo: '', valor_diaria: '' });
@@ -58,13 +58,19 @@ export default function CadastrosPage() {
 
   const resetClienteForm = () => {
     setEditingClienteId(null);
-    setNovoCliente({ nome: '', telefone_whatsapp: '', endereco: '' });
+    setNovoCliente({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '' });
     setEquipamentosCliente([{ descricao: '', local: '' }]);
   };
 
   const handleEditCliente = (c: any) => {
     setEditingClienteId(c.id);
-    setNovoCliente({ nome: c.nome, telefone_whatsapp: c.telefone_whatsapp || '', endereco: c.endereco || '' });
+    setNovoCliente({ 
+      nome: c.nome, 
+      telefone_whatsapp: c.telefone_whatsapp || '', 
+      endereco_rua: c.endereco_rua || '',
+      endereco_numero: c.endereco_numero || '',
+      endereco_bairro: c.endereco_bairro || ''
+    });
     setEquipamentosCliente(c.equipamentos?.length > 0 ? c.equipamentos : [{ descricao: '', local: '' }]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -234,9 +240,17 @@ export default function CadastrosPage() {
               <div>
                 <input type="text" required placeholder="Nome do Cliente" value={novoCliente.nome} onChange={e => setNovoCliente({...novoCliente, nome: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input type="text" required placeholder="WhatsApp (14) 99999-9999" maxLength={15} value={novoCliente.telefone_whatsapp} onChange={e => setNovoCliente({...novoCliente, telefone_whatsapp: formatPhone(e.target.value)})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
-                <input type="text" placeholder="Endereço" value={novoCliente.endereco} onChange={e => setNovoCliente({...novoCliente, endereco: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                <input type="text" placeholder="Bairro" value={novoCliente.endereco_bairro} onChange={e => setNovoCliente({...novoCliente, endereco_bairro: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+              </div>
+              <div className="grid grid-cols-4 gap-4">
+                <div className="col-span-3">
+                  <input type="text" placeholder="Rua / Avenida" value={novoCliente.endereco_rua} onChange={e => setNovoCliente({...novoCliente, endereco_rua: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                </div>
+                <div>
+                  <input type="text" placeholder="Nº" value={novoCliente.endereco_numero} onChange={e => setNovoCliente({...novoCliente, endereco_numero: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                </div>
               </div>
               
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
@@ -279,6 +293,11 @@ export default function CadastrosPage() {
                       <div>
                         <p className="font-bold text-slate-800">{c.nome}</p>
                         <p className="text-sm text-slate-500">{c.telefone_whatsapp}</p>
+                        {c.endereco_rua && (
+                          <p className="text-xs text-slate-500 mt-1">
+                            {c.endereco_rua}, {c.endereco_numero} - {c.endereco_bairro}
+                          </p>
+                        )}
                         {c.equipamentos?.length > 0 && (
                           <div className="mt-2 text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">
                             <span className="font-bold">Equipamentos:</span> {c.equipamentos.map((e: any) => e.descricao).join(', ')}
