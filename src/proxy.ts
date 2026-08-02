@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 export function proxy(request: NextRequest) {
   const isAuth = request.cookies.get('master_auth')?.value === 'true';
+  const role = request.cookies.get('master_role')?.value;
   const isLoginPage = request.nextUrl.pathname === '/login';
 
   if (!isAuth && !isLoginPage) {
@@ -11,6 +12,15 @@ export function proxy(request: NextRequest) {
 
   if (isAuth && isLoginPage) {
     return NextResponse.redirect(new URL('/', request.url));
+  }
+  
+  // RBAC: Block admin routes for 'funcionario'
+  const adminOnlyRoutes = ['/orcamentos', '/cadastros', '/rh', '/financeiro', '/historico'];
+  if (role === 'funcionario') {
+    const isTryingAdminRoute = adminOnlyRoutes.some(route => request.nextUrl.pathname.startsWith(route));
+    if (isTryingAdminRoute) {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
   }
 
   return NextResponse.next();

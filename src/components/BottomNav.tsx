@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -25,12 +25,28 @@ const mainNavItems = [
 export default function BottomNav() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [role, setRole] = useState('admin');
+
+  useEffect(() => {
+    const cookies = document.cookie.split(';');
+    const roleCookie = cookies.find(c => c.trim().startsWith('master_role='));
+    if (roleCookie) {
+      setRole(roleCookie.split('=')[1]);
+    }
+  }, []);
+
+  const navItems = mainNavItems.filter(item => {
+    if (role === 'funcionario') {
+      return item.name === 'Início' || item.name === 'Agenda';
+    }
+    return true;
+  });
 
   return (
     <>
       <nav className="fixed bottom-0 sm:bottom-4 left-0 sm:left-1/2 sm:-translate-x-1/2 w-full sm:w-auto sm:min-w-[400px] z-50">
       <div className="bg-white/70 backdrop-blur-xl sm:rounded-2xl border-t sm:border border-slate-200/50 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] sm:shadow-[0_8px_30px_rgb(0,0,0,0.08)] px-4 py-2 sm:py-3 flex justify-between items-center gap-2">
-        {mainNavItems.map((item) => {
+        {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
           
           return (
@@ -51,13 +67,15 @@ export default function BottomNav() {
           );
         })}
 
-        <button
-          onClick={() => setIsMenuOpen(true)}
-          className="flex flex-col items-center justify-center w-14 h-12 rounded-xl text-slate-400 hover:text-slate-600 transition-all duration-200"
-        >
-          <Menu size={22} />
-          <span className="text-[10px] mt-1 font-medium">Mais</span>
-        </button>
+        {role !== 'funcionario' && (
+          <button
+            onClick={() => setIsMenuOpen(true)}
+            className="flex flex-col items-center justify-center w-14 h-12 rounded-xl text-slate-400 hover:text-slate-600 transition-all duration-200"
+          >
+            <Menu size={22} />
+            <span className="text-[10px] mt-1 font-medium">Mais</span>
+          </button>
+        )}
       </div>
     </nav>
 

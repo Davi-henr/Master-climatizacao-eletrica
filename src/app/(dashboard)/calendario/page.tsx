@@ -42,6 +42,16 @@ export default function CalendarioPage() {
   const [novoAgendamento, setNovoAgendamento] = useState('');
   const [novoTecnico, setNovoTecnico] = useState('');
   const [loadingReschedule, setLoadingReschedule] = useState(false);
+  
+  const [role, setRole] = useState('admin');
+
+  useEffect(() => {
+    const cookies = document.cookie.split(';');
+    const roleCookie = cookies.find(c => c.trim().startsWith('master_role='));
+    if (roleCookie) {
+      setRole(roleCookie.split('=')[1]);
+    }
+  }, []);
 
   useEffect(() => {
     fetchActiveOS();
@@ -266,10 +276,12 @@ export default function CalendarioPage() {
                   <p className="text-sm font-medium text-slate-700">Cliente: <span className="font-bold text-slate-900">{os.cliente?.nome}</span></p>
                   <p className="text-sm font-medium text-slate-700">Técnico: <span className="font-bold text-slate-900">{os.tecnico?.nome}</span></p>
                   <p className="text-sm font-medium text-slate-700">Horário: <span className="font-bold text-brand-orange">{format(parseISO(os.data_agendamento), 'HH:mm')}</span></p>
-                  <p className="text-sm font-medium text-slate-700 mt-2">Valor: R$ {os.valor_total.toFixed(2).replace('.', ',')}</p>
+                  {role !== 'funcionario' && (
+                    <p className="text-sm font-medium text-slate-700 mt-2">Valor: R$ {os.valor_total.toFixed(2).replace('.', ',')}</p>
+                  )}
                 </div>
 
-                {os.status === 'os_ativa' && (
+                {os.status === 'os_ativa' && role !== 'funcionario' && (
                   <div className="flex gap-2">
                     <button 
                       onClick={() => {

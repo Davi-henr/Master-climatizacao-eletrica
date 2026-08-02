@@ -1,66 +1,167 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { TrendingUp, FileText, CalendarDays, Wallet, CheckCircle, Clock } from 'lucide-react';
+import { TrendingUp, FileText, CalendarDays, Wallet, CheckCircle, Clock, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { format, isThisWeek, parseISO } from 'date-fns';
 import PageHeader from '@/components/PageHeader';
+import { PDFDownloadLink, Document, Page, Text as PdfText, View, StyleSheet, Image } from '@react-pdf/renderer';
+
+const pdfStyles = StyleSheet.create({
+  page: { padding: 30, backgroundColor: '#FFFFFF' },
+  header: { marginBottom: 20, borderBottomWidth: 2, borderBottomColor: '#ea580c', paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerText: { flex: 1 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1e293b' },
+  subtitle: { fontSize: 12, color: '#64748b' },
+  logo: { width: 100, height: 40, objectFit: 'contain' },
+  body: { fontSize: 12, color: '#334155', lineHeight: 1.6 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', paddingBottom: 5 },
+  label: { fontWeight: 'bold', color: '#1e293b' },
+  value: { color: '#0f172a' },
+  totalBox: { marginTop: 20, padding: 15, backgroundColor: '#f8fafc', borderLeftWidth: 4, borderLeftColor: '#ea580c' },
+  totalLabel: { fontSize: 14, fontWeight: 'bold', color: '#1e293b' },
+  totalValue: { fontSize: 18, fontWeight: 'bold', color: '#ea580c', marginTop: 5 },
+  signature: { marginTop: 60, borderTopWidth: 1, borderTopColor: '#94a3b8', width: 250, alignSelf: 'center', textAlign: 'center', paddingTop: 10 }
+});
+
+const ReciboPDF = ({ pagamento, funcionario, logo }: { pagamento: any, funcionario: any, logo: string | null }) => (
+  <Document>
+    <Page size="A4" style={pdfStyles.page}>
+      <View style={pdfStyles.header}>
+        <View style={pdfStyles.headerText}>
+          <PdfText style={pdfStyles.title}>Recibo de Pagamento</PdfText>
+          <PdfText style={pdfStyles.subtitle}>Master Climatização e Elétrica</PdfText>
+        </View>
+        {logo && <Image src={logo} style={pdfStyles.logo} />}
+      </View>
+      <View style={pdfStyles.body}>
+        <PdfText style={{ marginBottom: 20 }}>Recebi(emos) de MASTER CLIMATIZAÇÃO E ELÉTRICA a importância abaixo discriminada, referente a prestação de serviços (diárias).</PdfText>
+        
+        <View style={pdfStyles.row}>
+          <PdfText style={pdfStyles.label}>Técnico / Funcionário:</PdfText>
+          <PdfText style={pdfStyles.value}>{funcionario.nome}</PdfText>
+        </View>
+        <View style={pdfStyles.row}>
+          <PdfText style={pdfStyles.label}>Cargo:</PdfText>
+          <PdfText style={pdfStyles.value}>{funcionario.cargo || 'Técnico'}</PdfText>
+        </View>
+        <View style={pdfStyles.row}>
+          <PdfText style={pdfStyles.label}>Dias Trabalhados:</PdfText>
+          <PdfText style={pdfStyles.value}>{pagamento.dias_trabalhados} (R$ {pagamento.valor_diaria.toFixed(2)}/dia)</PdfText>
+        </View>
+        <View style={pdfStyles.row}>
+          <PdfText style={pdfStyles.label}>Extras / Bônus:</PdfText>
+          <PdfText style={pdfStyles.value}>R$ {pagamento.valor_extras.toFixed(2)}</PdfText>
+        </View>
+        <View style={pdfStyles.row}>
+          <PdfText style={pdfStyles.label}>Data do Pagamento:</PdfText>
+          <PdfText style={pdfStyles.value}>{new Date(pagamento.data_pagamento).toLocaleDateString('pt-BR')}</PdfText>
+        </View>
+        
+        <View style={pdfStyles.totalBox}>
+          <PdfText style={pdfStyles.totalLabel}>Valor Total Recebido:</PdfText>
+          <PdfText style={pdfStyles.totalValue}>R$ {pagamento.total_pago.toFixed(2)}</PdfText>
+        </View>
+
+        <View style={pdfStyles.signature}>
+          <PdfText style={{ fontSize: 10, color: '#64748b' }}>Assinatura do Funcionário</PdfText>
+        </View>
+      </View>
+    </Page>
+  </Document>
+);
 
 export default function DashboardPage() {
+  const [role, setRole] = useState('admin');
+  const [funcId, setFuncId] = useState('');
+  
   const [stats, setStats] = useState({ orcamentos: 0, osAtivas: 0, osFinalizadas: 0, receitaMes: 0 });
   const [ultimosOrcamentos, setUltimosOrcamentos] = useState<any[]>([]);
   const [ultimasMovimentacoes, setUltimasMovimentacoes] = useState<any[]>([]);
   const [planejamentoSemana, setPlanejamentoSemana] = useState<any[]>([]);
+  const [meusPagamentos, setMeusPagamentos] = useState<any[]>([]);
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardData();
+    const cookies = document.cookie.split(';');
+    let currentRole = 'admin';
+    let currentFuncId = '';
+    cookies.forEach(c => {
+      if (c.trim().startsWith('master_role=')) currentRole = c.split('=')[1];
+      if (c.trim().startsWith('master_func_id=')) currentFuncId = c.split('=')[1];
+    });
+    setRole(currentRole);
+    setFuncId(currentFuncId);
+    
+    // Fetch Logo
+    const fetchLogo = async () => {
+      const cached = sessionStorage.getItem('master_logo');
+      if (cached) {
+        setLogoBase64(cached);
+        return;
+      }
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'logo_base64').single();
+      if (data?.valor) setLogoBase64(data.valor);
+    };
+    fetchLogo();
+
+    fetchDashboardData(currentRole, currentFuncId);
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (userRole: string, userFuncId: string) => {
     setLoading(true);
     
-    // Contagens
-    const { count: countOrc } = await supabase.from('orcamentos_os').select('*', { count: 'exact', head: true }).eq('status', 'orcamento_pendente');
-    const { count: countAtivas } = await supabase.from('orcamentos_os').select('*', { count: 'exact', head: true }).eq('status', 'os_ativa');
-    const { count: countFinais } = await supabase.from('orcamentos_os').select('*', { count: 'exact', head: true }).eq('status', 'os_finalizada');
-    
-    // Receita Mês Atual
-    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-    const { data: finData } = await supabase.from('financeiro').select('valor, tipo').gte('data_lancamento', inicioMes);
-    let receita = 0;
-    if (finData) {
-      finData.forEach(f => {
-        if (f.tipo === 'receita') receita += f.valor;
-        else receita -= f.valor;
+    if (userRole === 'admin') {
+      // Contagens
+      const { count: countOrc } = await supabase.from('orcamentos_os').select('*', { count: 'exact', head: true }).eq('status', 'orcamento_pendente');
+      const { count: countAtivas } = await supabase.from('orcamentos_os').select('*', { count: 'exact', head: true }).eq('status', 'os_ativa');
+      const { count: countFinais } = await supabase.from('orcamentos_os').select('*', { count: 'exact', head: true }).eq('status', 'os_finalizada');
+      
+      // Receita Mês Atual
+      const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const { data: finData } = await supabase.from('financeiro').select('valor, tipo').gte('data_lancamento', inicioMes);
+      let receita = 0;
+      if (finData) {
+        finData.forEach(f => {
+          if (f.tipo === 'receita') receita += f.valor;
+          else receita -= f.valor;
+        });
+      }
+
+      setStats({
+        orcamentos: countOrc || 0,
+        osAtivas: countAtivas || 0,
+        osFinalizadas: countFinais || 0,
+        receitaMes: receita
       });
+
+      // Últimos 5 Orçamentos/OS
+      const { data: ultimosOs } = await supabase
+        .from('orcamentos_os')
+        .select('id, status, valor_total, created_at, cliente:clientes(nome)')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (ultimosOs) setUltimosOrcamentos(ultimosOs);
+
+      // Últimas 5 Movimentações Financeiras
+      const { data: movs } = await supabase
+        .from('financeiro')
+        .select('id, tipo, categoria, valor, data_lancamento, descricao')
+        .order('data_lancamento', { ascending: false })
+        .limit(5);
+      
+      if (movs) setUltimasMovimentacoes(movs);
+    } else if (userRole === 'funcionario' && userFuncId) {
+      // Meus Pagamentos
+      const { data: pags } = await supabase
+        .from('rh_pagamentos')
+        .select('*, funcionario:funcionarios(nome, cargo)')
+        .eq('funcionario_id', userFuncId)
+        .order('data_pagamento', { ascending: false });
+        
+      if (pags) setMeusPagamentos(pags);
     }
-
-    setStats({
-      orcamentos: countOrc || 0,
-      osAtivas: countAtivas || 0,
-      osFinalizadas: countFinais || 0,
-      receitaMes: receita
-    });
-
-    // Últimos 5 Orçamentos/OS
-    const { data: ultimosOs } = await supabase
-      .from('orcamentos_os')
-      .select('id, status, valor_total, created_at, cliente:clientes(nome)')
-      .order('created_at', { ascending: false })
-      .limit(5);
-    
-    if (ultimosOs) setUltimosOrcamentos(ultimosOs);
-
-    // Últimas 5 Movimentações Financeiras
-    const { data: movs } = await supabase
-      .from('financeiro')
-      .select('id, tipo, categoria, valor, data_lancamento, descricao')
-      .order('data_lancamento', { ascending: false })
-      .limit(5);
-    
-    if (movs) setUltimasMovimentacoes(movs);
 
     // Planejamento da Semana (OS Ativas ordenadas por data com urgência)
     const { data: ativasData } = await supabase
@@ -88,29 +189,37 @@ export default function DashboardPage() {
       <PageHeader title="Início" subtitle="Resumo da sua operação diária" />
       
       {/* Header Resumo */}
-      <div className="bg-brand-blue text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10 blur-xl"></div>
-        <h2 className="text-xl font-black mb-1 relative z-10">Olá, Master! 👋</h2>
-        <p className="text-blue-100 text-sm mb-6 relative z-10">Aqui está o resumo do mês.</p>
-        
-        <div className="grid grid-cols-2 gap-4 relative z-10">
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
-            <div className="flex items-center gap-2 text-blue-100 mb-2">
-              <TrendingUp size={16} />
-              <span className="text-xs font-bold uppercase tracking-wider">Caixa do Mês</span>
-            </div>
-            <p className="text-xl font-black">R$ {stats.receitaMes.toFixed(2)}</p>
-          </div>
+      {role === 'admin' ? (
+        <div className="bg-brand-blue text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10 blur-xl"></div>
+          <h2 className="text-xl font-black mb-1 relative z-10">Olá, Master! 👋</h2>
+          <p className="text-blue-100 text-sm mb-6 relative z-10">Aqui está o resumo do mês.</p>
           
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
-            <div className="flex items-center gap-2 text-blue-100 mb-2">
-              <CalendarDays size={16} />
-              <span className="text-xs font-bold uppercase tracking-wider">OS Ativas</span>
+          <div className="grid grid-cols-2 gap-4 relative z-10">
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+              <div className="flex items-center gap-2 text-blue-100 mb-2">
+                <TrendingUp size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">Caixa do Mês</span>
+              </div>
+              <p className="text-xl font-black">R$ {stats.receitaMes.toFixed(2)}</p>
             </div>
-            <p className="text-xl font-black">{stats.osAtivas}</p>
+            
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+              <div className="flex items-center gap-2 text-blue-100 mb-2">
+                <CalendarDays size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">OS Ativas</span>
+              </div>
+              <p className="text-xl font-black">{stats.osAtivas}</p>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-slate-800 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10 blur-xl"></div>
+          <h2 className="text-xl font-black mb-1 relative z-10">Bem-vindo(a)! 👋</h2>
+          <p className="text-slate-300 text-sm relative z-10">Confira seus agendamentos e recibos abaixo.</p>
+        </div>
+      )}
 
       {/* Planejamento da Semana */}
       <div>
@@ -144,75 +253,121 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Grid Atalhos */}
-      <div className="grid grid-cols-2 gap-4">
-        <Link href="/orcamentos/novo" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center gap-2 hover:bg-slate-50 hover:-translate-y-1 transition-all duration-300">
-          <div className="w-12 h-12 bg-orange-50 text-brand-orange rounded-full flex items-center justify-center mb-1 transition-transform group-hover:scale-110">
-            <FileText size={24} />
+      {role === 'admin' ? (
+        <>
+          {/* Grid Atalhos */}
+          <div className="grid grid-cols-2 gap-4">
+            <Link href="/orcamentos/novo" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center gap-2 hover:bg-slate-50 hover:-translate-y-1 transition-all duration-300">
+              <div className="w-12 h-12 bg-orange-50 text-brand-orange rounded-full flex items-center justify-center mb-1 transition-transform group-hover:scale-110">
+                <FileText size={24} />
+              </div>
+              <span className="font-bold text-slate-700 text-sm">Novo Orçamento</span>
+            </Link>
+            
+            <Link href="/rh" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center gap-2 hover:bg-slate-50 hover:-translate-y-1 transition-all duration-300">
+              <div className="w-12 h-12 bg-blue-50 text-brand-blue rounded-full flex items-center justify-center mb-1 transition-transform group-hover:scale-110">
+                <Wallet size={24} />
+              </div>
+              <span className="font-bold text-slate-700 text-sm">Pagar Funcionário</span>
+            </Link>
           </div>
-          <span className="font-bold text-slate-700 text-sm">Novo Orçamento</span>
-        </Link>
-        
-        <Link href="/rh" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center gap-2 hover:bg-slate-50 hover:-translate-y-1 transition-all duration-300">
-          <div className="w-12 h-12 bg-blue-50 text-brand-blue rounded-full flex items-center justify-center mb-1 transition-transform group-hover:scale-110">
-            <Wallet size={24} />
-          </div>
-          <span className="font-bold text-slate-700 text-sm">Pagar Funcionário</span>
-        </Link>
-      </div>
 
-      {/* Histórico Rápido (Limitado a 5) */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* Últimas Movimentações */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-            <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Últimas Transações</h3>
+          {/* Histórico Rápido (Limitado a 5) */}
+          <div className="grid grid-cols-1 gap-6">
+            {/* Últimas Movimentações */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Últimas Transações</h3>
+              </div>
+              <div className="p-2 space-y-1">
+                {loading ? <p className="p-4 text-slate-500 text-sm">Carregando...</p> : ultimasMovimentacoes.length === 0 ? <p className="p-4 text-slate-500 text-sm">Sem movimentações recentes.</p> : (
+                  ultimasMovimentacoes.map(mov => (
+                    <div key={mov.id} className="p-3 hover:bg-slate-50 rounded-xl flex justify-between items-center transition-colors">
+                      <div>
+                        <p className="font-bold text-slate-700 text-sm">{mov.descricao}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{new Date(mov.data_lancamento).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                      <span className={`font-black text-sm ${mov.tipo === 'receita' ? 'text-green-600' : 'text-red-500'}`}>
+                        {mov.tipo === 'receita' ? '+' : '-'} R$ {mov.valor.toFixed(2)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Últimos Orçamentos */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Últimos Registros</h3>
+                <Link href="/orcamentos" className="text-brand-blue text-xs font-bold">Ver todos</Link>
+              </div>
+              <div className="p-2 space-y-1">
+                {loading ? <p className="p-4 text-slate-500 text-sm">Carregando...</p> : ultimosOrcamentos.length === 0 ? <p className="p-4 text-slate-500 text-sm">Sem orçamentos recentes.</p> : (
+                  ultimosOrcamentos.map(orc => (
+                    <div key={orc.id} className="p-3 hover:bg-slate-50 rounded-xl flex justify-between items-center transition-colors">
+                      <div>
+                        <p className="font-bold text-slate-700 text-sm">{Array.isArray(orc.cliente) ? orc.cliente[0].nome : orc.cliente?.nome}</p>
+                        <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                          orc.status === 'orcamento_pendente' ? 'bg-yellow-100 text-yellow-800' :
+                          orc.status === 'os_ativa' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                        }`}>
+                          {orc.status === 'orcamento_pendente' ? 'Pendente' : orc.status === 'os_ativa' ? 'Agendado' : 'Finalizado'}
+                        </span>
+                      </div>
+                      <span className="font-bold text-slate-700 text-sm">
+                        R$ {orc.valor_total.toFixed(2)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
-          <div className="p-2 space-y-1">
-            {loading ? <p className="p-4 text-slate-500 text-sm">Carregando...</p> : ultimasMovimentacoes.length === 0 ? <p className="p-4 text-slate-500 text-sm">Sem movimentações recentes.</p> : (
-              ultimasMovimentacoes.map(mov => (
-                <div key={mov.id} className="p-3 hover:bg-slate-50 rounded-xl flex justify-between items-center transition-colors">
-                  <div>
-                    <p className="font-bold text-slate-700 text-sm">{mov.descricao}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{new Date(mov.data_lancamento).toLocaleDateString('pt-BR')}</p>
+        </>
+      ) : (
+        <div className="mt-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold text-slate-800">Meus Pagamentos</h2>
+          </div>
+          <div className="space-y-3">
+            {loading ? (
+              <p className="text-slate-500 text-sm">Carregando...</p>
+            ) : meusPagamentos.length === 0 ? (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
+                <p className="text-slate-500 text-sm">Nenhum pagamento registrado.</p>
+              </div>
+            ) : (
+              meusPagamentos.map(pag => (
+                <div key={pag.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">
+                        {new Date(pag.data_pagamento).toLocaleDateString('pt-BR')}
+                      </p>
+                      <h4 className="font-bold text-slate-800 text-sm">{pag.dias_trabalhados} dias trabalhados</h4>
+                    </div>
+                    <span className="font-black text-brand-orange text-lg">R$ {pag.total_pago.toFixed(2)}</span>
                   </div>
-                  <span className={`font-black text-sm ${mov.tipo === 'receita' ? 'text-green-600' : 'text-red-500'}`}>
-                    {mov.tipo === 'receita' ? '+' : '-'} R$ {mov.valor.toFixed(2)}
-                  </span>
+                  
+                  <div className="pt-3 border-t border-slate-50">
+                    <PDFDownloadLink 
+                      document={<ReciboPDF pagamento={pag} funcionario={pag.funcionario || {nome: 'Você', cargo: 'Técnico'}} logo={logoBase64} />} 
+                      fileName={`Recibo-${pag.data_pagamento}.pdf`}
+                    >
+                      {({ loading: pdfLoading }) => (
+                        <button className="flex items-center justify-center w-full gap-2 text-sm font-bold text-brand-blue hover:text-white bg-blue-50 hover:bg-brand-blue px-3 py-2 rounded-xl transition-all">
+                          <FileText size={16}/> {pdfLoading ? 'Gerando PDF...' : 'Baixar Recibo PDF'}
+                        </button>
+                      )}
+                    </PDFDownloadLink>
+                  </div>
                 </div>
               ))
             )}
           </div>
         </div>
-
-        {/* Últimos Orçamentos */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-            <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Últimos Registros</h3>
-            <Link href="/orcamentos" className="text-brand-blue text-xs font-bold">Ver todos</Link>
-          </div>
-          <div className="p-2 space-y-1">
-            {loading ? <p className="p-4 text-slate-500 text-sm">Carregando...</p> : ultimosOrcamentos.length === 0 ? <p className="p-4 text-slate-500 text-sm">Sem orçamentos recentes.</p> : (
-              ultimosOrcamentos.map(orc => (
-                <div key={orc.id} className="p-3 hover:bg-slate-50 rounded-xl flex justify-between items-center transition-colors">
-                  <div>
-                    <p className="font-bold text-slate-700 text-sm">{Array.isArray(orc.cliente) ? orc.cliente[0].nome : orc.cliente?.nome}</p>
-                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                      orc.status === 'orcamento_pendente' ? 'bg-yellow-100 text-yellow-800' :
-                      orc.status === 'os_ativa' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                    }`}>
-                      {orc.status === 'orcamento_pendente' ? 'Pendente' : orc.status === 'os_ativa' ? 'Agendado' : 'Finalizado'}
-                    </span>
-                  </div>
-                  <span className="font-bold text-slate-700 text-sm">
-                    R$ {orc.valor_total.toFixed(2)}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+      )}
       
     </div>
   );
