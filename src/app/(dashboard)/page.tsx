@@ -80,6 +80,7 @@ export default function DashboardPage() {
   const [ultimosOrcamentos, setUltimosOrcamentos] = useState<any[]>([]);
   const [ultimasMovimentacoes, setUltimasMovimentacoes] = useState<any[]>([]);
   const [planejamentoSemana, setPlanejamentoSemana] = useState<any[]>([]);
+  const [limpezasConcluidas, setLimpezasConcluidas] = useState<any[]>([]);
   const [meusPagamentos, setMeusPagamentos] = useState<any[]>([]);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,6 +147,16 @@ export default function DashboardPage() {
       
       if (ultimosOs) setUltimosOrcamentos(ultimosOs);
 
+      // Limpezas Concluídas
+      const { data: limpezas } = await supabase
+        .from('orcamentos_os')
+        .select('id, data_agendamento, cliente:clientes(nome), itens_os(equipamentos(descricao, local))')
+        .eq('tipo_servico', 'Limpeza')
+        .eq('status', 'os_finalizada')
+        .order('data_agendamento', { ascending: false })
+        .limit(10);
+      if (limpezas) setLimpezasConcluidas(limpezas);
+
       // Últimas 5 Movimentações Financeiras
       const { data: movs } = await supabase
         .from('financeiro')
@@ -168,12 +179,25 @@ export default function DashboardPage() {
     // Planejamento da Semana (OS Ativas ordenadas por data com urgência)
     const { data: ativasData } = await supabase
       .from('orcamentos_os')
-      .select('id, data_agendamento, urgencia, cliente:clientes(nome)')
+      .select('id, data_agendamento, urgencia, cliente:clientes(nome, endereco), itens_os(equipamentos(descricao, local))')
       .eq('status', 'os_ativa')
       .order('data_agendamento', { ascending: true })
-      .limit(10); // Exibindo as próximas 10
+      .limit(20);
       
-    if (ativasData) setPlanejamentoSemana(ativasData);
+    if (ativasData) {
+      const sorted = [...ativasData].sort((a, b) => {
+        const dateA = a.data_agendamento ? a.data_agendamento.split('T')[0] : '';
+        const dateB = b.data_agendamento ? b.data_agendamento.split('T')[0] : '';
+        if (dateA === dateB) {
+           const urgencyLevel = { 'Muito Urgente': 3, 'Urgente': 2, 'Pouco Urgente': 1 } as any;
+           const uA = urgencyLevel[a.urgencia] || 0;
+           const uB = urgencyLevel[b.urgencia] || 0;
+           return uB - uA;
+        }
+        return 0; // The SQL already sorted by date
+      });
+      setPlanejamentoSemana(sorted);
+    }
 
     setLoading(false);
   };
@@ -238,19 +262,38 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {planejamentoSemana.map(os => (
-              <div key={os.id} className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-brand-blue border-y border-r border-slate-100 flex justify-between items-center">
-                <div>
-                  <h4 className="font-bold text-slate-800 text-sm">{Array.isArray(os.cliente) ? os.cliente[0].nome : os.cliente?.nome}</h4>
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mt-1">
+            {planejamentoSemana.map(os => {
+              const cli = Array.isArray(os.cliente) ? os.cliente[0] : os.cliente;
+              const equipamentos = os.itens_os?.filter((i:any)=>i.equipamentos).map((i:any)=>i.equipamentos) || [];
+              
+              return (
+              <div key={os.id} className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-brand-blue border-y border-r border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                <div className="flex-1">
+                  <h4 className="font-bold text-slate-800 text-sm">{cli?.nome}</h4>
+                  
+                  {cli?.endereco && (
+                    <p className="text-xs text-slate-500 mt-0.5">{cli.endereco}</p>
+                  )}
+                  
+                  {equipamentos.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {equipamentos.map((eq:any, idx:number) => (
+                        <span key={idx} className="bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded border border-slate-200">
+                          <span className="font-bold">{eq.local}</span>: {eq.descricao}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-brand-blue mt-2 bg-blue-50 w-fit px-2 py-1 rounded-lg border border-blue-100">
                     <Clock size={12} /> {format(parseISO(os.data_agendamento), 'dd/MM/yyyy HH:mm')}
                   </div>
                 </div>
-                <div>
+                <div className="self-end sm:self-center">
                   {getUrgencyBadge(os.urgencia)}
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>
@@ -323,6 +366,57 @@ export default function DashboardPage() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+
+            {/* Histórico Recente de Limpezas */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-green-50">
+                <h3 className="font-bold text-green-800 text-sm uppercase tracking-wider">Histórico de Limpezas Concluídas</h3>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-600 min-w-[500px]">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3">Cliente</th>
+                      <th className="px-4 py-3">Equipamento/Local</th>
+                      <th className="px-4 py-3">Data</th>
+                      <th className="px-4 py-3 text-right">Passou</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={4} className="p-4 text-center">Carregando...</td></tr>
+                    ) : limpezasConcluidas.length === 0 ? (
+                      <tr><td colSpan={4} className="p-4 text-center text-slate-500">Sem histórico recente.</td></tr>
+                    ) : (
+                      limpezasConcluidas.map(lz => {
+                        const cli = Array.isArray(lz.cliente) ? lz.cliente[0] : lz.cliente;
+                        const equipamentos = lz.itens_os?.filter((i:any)=>i.equipamentos).map((i:any)=>i.equipamentos) || [];
+                        const dataLz = new Date(lz.data_agendamento || new Date());
+                        const daysPassed = Math.floor((new Date().getTime() - dataLz.getTime()) / (1000 * 3600 * 24));
+                        
+                        return (
+                          <tr key={lz.id} className="border-b border-slate-50 hover:bg-slate-50">
+                            <td className="px-4 py-3 font-bold text-slate-700">{cli?.nome}</td>
+                            <td className="px-4 py-3">
+                              {equipamentos.length > 0 ? (
+                                equipamentos.map((eq:any, idx:number) => (
+                                  <div key={idx} className="text-xs">
+                                    <span className="font-bold text-brand-blue">{eq.local}</span>: {eq.descricao}
+                                  </div>
+                                ))
+                              ) : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-xs">{dataLz.toLocaleDateString('pt-BR')}</td>
+                            <td className="px-4 py-3 text-right font-bold text-brand-orange">{daysPassed} dias</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
