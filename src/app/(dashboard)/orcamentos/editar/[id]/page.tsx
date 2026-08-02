@@ -24,6 +24,7 @@ export default function EditarOrcamentoPage() {
   const [clienteEquipamentos, setClienteEquipamentos] = useState<any[]>([]);
   const [observacoes, setObservacoes] = useState('');
   const [urgencia, setUrgencia] = useState('Pouco Urgente');
+  const [desconto, setDesconto] = useState<number | ''>('');
   
   // Blocos de Serviço
   const [blocos, setBlocos] = useState([{
@@ -73,6 +74,7 @@ export default function EditarOrcamentoPage() {
       setClienteSelecionado(o.cliente_id);
       setObservacoes(o.observacoes || '');
       setUrgencia(o.urgencia || 'Pouco Urgente');
+      setDesconto(o.valor_desconto || '');
 
       // Reconstruir os blocos a partir de itens_os
       const blocosMap = new Map();
@@ -106,13 +108,13 @@ export default function EditarOrcamentoPage() {
   };
 
   const calculateTotal = () => {
-    let total = 0;
+    let subtotal = 0;
     blocos.forEach(bloco => {
       bloco.itens.forEach(item => {
-        total += item.preco * item.quantidade;
+        subtotal += item.preco * item.quantidade;
       });
     });
-    return total;
+    return subtotal - (Number(desconto) || 0);
   };
 
   const addBloco = () => {
@@ -202,6 +204,7 @@ export default function EditarOrcamentoPage() {
         .update({
           cliente_id: clienteSelecionado,
           valor_total: calculateTotal(),
+          valor_desconto: Number(desconto) || 0,
           observacoes: observacoes,
           urgencia: urgencia,
           tipo_servico: blocos[0]?.tipoServico || 'Instalação'
@@ -392,8 +395,17 @@ export default function EditarOrcamentoPage() {
             />
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-            <div>
+          <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <label className="text-sm font-bold text-slate-500">Desconto (R$)</label>
+              <input 
+                type="number" step="0.01" min="0" 
+                value={desconto} onChange={e => setDesconto(Number(e.target.value))}
+                placeholder="0.00"
+                className="w-32 px-3 py-2 border border-slate-200 rounded-lg outline-none text-right font-bold text-slate-700 bg-slate-50"
+              />
+            </div>
+            <div className="flex justify-between items-center">
               <span className="block text-xs text-slate-500 uppercase font-bold tracking-wider">Valor Total</span>
               <span className="text-3xl font-black text-brand-orange">R$ {calculateTotal().toFixed(2)}</span>
             </div>

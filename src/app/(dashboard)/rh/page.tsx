@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Users, Eye, EyeOff, Save, FileText, CheckCircle } from 'lucide-react';
+import { Users, Eye, EyeOff, Save, FileText, CheckCircle, Trash2 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import PageHeader from '@/components/PageHeader';
@@ -53,6 +53,12 @@ const ReciboPDF = ({ pagamento, funcionario, logo }: { pagamento: any, funcionar
           <Text style={pdfStyles.label}>Extras / Bônus:</Text>
           <Text style={pdfStyles.value}>R$ {pagamento.valor_extras.toFixed(2)}</Text>
         </View>
+        {(pagamento.valor_desconto && pagamento.valor_desconto > 0) ? (
+          <View style={pdfStyles.row}>
+            <Text style={pdfStyles.label}>Desconto:</Text>
+            <Text style={{ ...pdfStyles.value, color: '#ef4444' }}>- R$ {pagamento.valor_desconto.toFixed(2)}</Text>
+          </View>
+        ) : null}
         <View style={pdfStyles.row}>
           <Text style={pdfStyles.label}>Data do Pagamento:</Text>
           <Text style={pdfStyles.value}>{new Date(pagamento.data_pagamento).toLocaleDateString('pt-BR')}</Text>
@@ -82,6 +88,7 @@ export default function RHPage() {
   const [funcId, setFuncId] = useState('');
   const [dias, setDias] = useState<number | ''>('');
   const [extras, setExtras] = useState<number | ''>('');
+  const [desconto, setDesconto] = useState<number | ''>('');
 
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
 
@@ -121,7 +128,8 @@ export default function RHPage() {
     if (!selectedFunc) return 0;
     const qtdDias = Number(dias) || 0;
     const vExtras = Number(extras) || 0;
-    return (qtdDias * selectedFunc.valor_diaria) + vExtras;
+    const vDesc = Number(desconto) || 0;
+    return (qtdDias * selectedFunc.valor_diaria) + vExtras - vDesc;
   };
 
   const handlePagar = async (e: React.FormEvent) => {
@@ -138,6 +146,7 @@ export default function RHPage() {
         dias_trabalhados: Number(dias),
         valor_diaria: selectedFunc.valor_diaria,
         valor_extras: Number(extras) || 0,
+        valor_desconto: Number(desconto) || 0,
         total_pago: valorTotal
       };
       const { error: rhError } = await supabase.from('rh_pagamentos').insert(pagamentoData);
@@ -156,11 +165,37 @@ export default function RHPage() {
       setFuncId('');
       setDias('');
       setExtras('');
+      setDesconto('');
       if (showHistory) fetchPagamentos();
 
     } catch (error) {
       console.error(error);
       alert('Erro ao registrar pagamento.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExcluirPagamento = async (pag: any) => {
+    if (!confirm('Tem certeza que deseja excluir este pagamento? Isso também removerá a despesa do Fluxo de Caixa.')) return;
+    
+    setLoading(true);
+    try {
+      // Remover do financeiro
+      const descricaoFin = `Pagamento Folha: ${pag.funcionario?.nome} (${pag.dias_trabalhados} dias)`;
+      await supabase.from('financeiro')
+        .delete()
+        .eq('descricao', descricaoFin)
+        .eq('valor', pag.total_pago);
+
+      // Remover do RH
+      const { error } = await supabase.from('rh_pagamentos').delete().eq('id', pag.id);
+      if (error) throw error;
+
+      fetchPagamentos();
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+      alert('Erro ao excluir pagamento.');
     } finally {
       setLoading(false);
     }
@@ -184,7 +219,7 @@ export default function RHPage() {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Dias Trab.</label>
             <input 
@@ -200,6 +235,15 @@ export default function RHPage() {
               type="number" step="0.01" min="0"
               value={extras} onChange={e => setExtras(Number(e.target.value))}
               placeholder="Ex: 50.00"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Desconto (R$)</label>
+            <input 
+              type="number" step="0.01" min="0"
+              value={desconto} onChange={e => setDesconto(Number(e.target.value))}
+              placeholder="Ex: 20.00"
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
             />
           </div>
@@ -246,7 +290,7 @@ export default function RHPage() {
                     <span className="font-black text-brand-orange">R$ {pag.total_pago.toFixed(2)}</span>
                   </div>
                   
-                  <div className="pt-2 border-t border-slate-50">
+                  <div className="pt-2 border-t border-slate-50 flex items-center justify-between">
                     <PDFDownloadLink 
                       document={<ReciboPDF pagamento={pag} funcionario={pag.funcionario || {nome: 'Desconhecido', cargo: 'N/A'}} logo={logoBase64} />} 
                       fileName={`Recibo-${pag.funcionario?.nome || 'Tec'}-${new Date(pag.data_pagamento).getTime()}.pdf`}
@@ -257,6 +301,14 @@ export default function RHPage() {
                         </button>
                       )}
                     </PDFDownloadLink>
+                    
+                    <button 
+                      onClick={() => handleExcluirPagamento(pag)}
+                      className="p-1.5 text-red-500 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+                      title="Excluir Pagamento"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
               ))

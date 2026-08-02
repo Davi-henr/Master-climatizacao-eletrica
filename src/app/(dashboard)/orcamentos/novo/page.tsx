@@ -18,6 +18,7 @@ export default function NovoOrcamentoPage() {
   const [clienteEquipamentos, setClienteEquipamentos] = useState<any[]>([]);
   const [observacoes, setObservacoes] = useState('');
   const [urgencia, setUrgencia] = useState('Pouco Urgente');
+  const [desconto, setDesconto] = useState<number | ''>('');
   
   // Blocos de Serviço
   const [blocos, setBlocos] = useState([{
@@ -103,13 +104,14 @@ export default function NovoOrcamentoPage() {
   };
 
   const calculateTotal = () => {
-    return blocos.reduce((acc, bloco) => {
+    const subtotal = blocos.reduce((acc, bloco) => {
       const blocoTotal = bloco.itens.reduce((sum, item) => {
         const val = Number(item.valor_unitario) || 0;
         return sum + (item.quantidade * val);
       }, 0);
       return acc + blocoTotal;
     }, 0);
+    return subtotal - (Number(desconto) || 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -129,6 +131,7 @@ export default function NovoOrcamentoPage() {
           cliente_id: clienteSelecionado,
           status: 'orcamento_pendente',
           valor_total: calculateTotal(),
+          valor_desconto: Number(desconto) || 0,
           observacoes: observacoes,
           urgencia: urgencia,
           tipo_servico: blocos[0].tipoServico || 'Instalação'
@@ -344,7 +347,19 @@ export default function NovoOrcamentoPage() {
 
         {/* Resumo */}
         <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-sm space-y-4">
-          <div className="flex justify-between items-end">
+          <div className="flex flex-col gap-2 border-b border-slate-700 pb-4">
+            <div className="flex justify-between items-center">
+              <label className="text-sm font-medium text-slate-300">Desconto (R$)</label>
+              <input 
+                type="number" step="0.01" min="0" 
+                value={desconto} onChange={e => setDesconto(Number(e.target.value))}
+                placeholder="0.00"
+                className="w-32 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg outline-none text-right font-bold text-white"
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-between items-end pt-2">
             <p className="text-slate-400 text-sm font-medium">Total do Orçamento</p>
             <h3 className="text-3xl font-black text-brand-yellow">
               R$ {calculateTotal().toFixed(2).replace('.', ',')}

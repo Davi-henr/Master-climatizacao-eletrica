@@ -54,6 +54,12 @@ const ReciboPDF = ({ pagamento, funcionario, logo }: { pagamento: any, funcionar
           <PdfText style={pdfStyles.label}>Extras / Bônus:</PdfText>
           <PdfText style={pdfStyles.value}>R$ {pagamento.valor_extras.toFixed(2)}</PdfText>
         </View>
+        {(pagamento.valor_desconto && pagamento.valor_desconto > 0) ? (
+          <View style={pdfStyles.row}>
+            <PdfText style={pdfStyles.label}>Desconto:</PdfText>
+            <PdfText style={{ ...pdfStyles.value, color: '#ef4444' }}>- R$ {pagamento.valor_desconto.toFixed(2)}</PdfText>
+          </View>
+        ) : null}
         <View style={pdfStyles.row}>
           <PdfText style={pdfStyles.label}>Data do Pagamento:</PdfText>
           <PdfText style={pdfStyles.value}>{new Date(pagamento.data_pagamento).toLocaleDateString('pt-BR')}</PdfText>

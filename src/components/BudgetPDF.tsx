@@ -144,6 +144,12 @@ export const BudgetPDF = ({ orcamento, logo }: { orcamento: any, logo?: string |
               <Text style={styles.label}>Subtotal Mão de Obra:</Text>
               <Text style={styles.value}>R$ {totalMaoDeObra.toFixed(2)}</Text>
             </View>
+            {(orcamento.valor_desconto && orcamento.valor_desconto > 0) ? (
+              <View style={styles.summaryRow}>
+                <Text style={styles.label}>Desconto:</Text>
+                <Text style={{ ...styles.value, color: '#ef4444' }}>- R$ {orcamento.valor_desconto.toFixed(2)}</Text>
+              </View>
+            ) : null}
             <View style={styles.summaryTotal}>
               <Text style={styles.totalLabel}>Valor Total:</Text>
               <Text style={styles.totalValue}>R$ {orcamento.valor_total.toFixed(2)}</Text>
