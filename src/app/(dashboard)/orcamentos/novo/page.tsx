@@ -130,7 +130,8 @@ export default function NovoOrcamentoPage() {
           status: 'orcamento_pendente',
           valor_total: calculateTotal(),
           observacoes: observacoes,
-          urgencia: urgencia
+          urgencia: urgencia,
+          tipo_servico: blocos[0].tipoServico || 'Instalação'
         })
         .select()
         .single();

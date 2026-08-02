@@ -29,6 +29,7 @@ export default function EditarOrcamentoPage() {
   const [blocos, setBlocos] = useState([{
     id: Date.now().toString(),
     equipamentoId: '',
+    tipoServico: 'Instalação',
     itens: [] as { itemTabelaId: string, quantidade: number, tipo_custo: string, preco: number }[]
   }]);
 
@@ -82,6 +83,7 @@ export default function EditarOrcamentoPage() {
           blocosMap.set(eqId, {
             id: eqId === 'geral' ? Date.now().toString() : eqId,
             equipamentoId: eqId === 'geral' ? '' : eqId,
+            tipoServico: o.tipo_servico || 'Instalação',
             itens: []
           });
         }
@@ -114,7 +116,7 @@ export default function EditarOrcamentoPage() {
   };
 
   const addBloco = () => {
-    setBlocos([...blocos, { id: Date.now().toString(), equipamentoId: '', itens: [] }]);
+    setBlocos([...blocos, { id: Date.now().toString(), equipamentoId: '', tipoServico: 'Instalação', itens: [] }]);
   };
 
   const removeBloco = (idToRemove: string) => {
@@ -201,7 +203,8 @@ export default function EditarOrcamentoPage() {
           cliente_id: clienteSelecionado,
           valor_total: calculateTotal(),
           observacoes: observacoes,
-          urgencia: urgencia
+          urgencia: urgencia,
+          tipo_servico: blocos[0]?.tipoServico || 'Instalação'
         })
         .eq('id', id);
 
@@ -297,17 +300,36 @@ export default function EditarOrcamentoPage() {
                 </button>
               )}
 
-              <div className="mb-4 pr-12">
-                <label className="block text-xs font-bold text-slate-500 mb-1">Este bloco pertence a qual equipamento?</label>
-                <select 
-                  value={bloco.equipamentoId} onChange={e => setEquipamentoParaBloco(bloco.id, e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-slate-50 text-sm"
-                >
-                  <option value="">Geral (Sem equipamento específico)</option>
-                  {clienteEquipamentos.map(eq => (
-                    <option key={eq.id} value={eq.id}>{eq.descricao} ({eq.local})</option>
-                  ))}
-                </select>
+              <div className="mb-4 pr-12 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Este bloco pertence a qual equipamento?</label>
+                  <select 
+                    value={bloco.equipamentoId} onChange={e => setEquipamentoParaBloco(bloco.id, e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-slate-50 text-sm"
+                  >
+                    <option value="">Geral (Sem equipamento específico)</option>
+                    {clienteEquipamentos.map(eq => (
+                      <option key={eq.id} value={eq.id}>{eq.descricao} ({eq.local})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Tipo de Serviço (Cor no Calendário)</label>
+                  <select 
+                    required value={bloco.tipoServico} onChange={e => {
+                      const newB = [...blocos];
+                      const b = newB.find(x => x.id === bloco.id);
+                      if(b) b.tipoServico = e.target.value;
+                      setBlocos(newB);
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-slate-50 text-sm"
+                  >
+                    <option value="Instalação">Instalação (Azul)</option>
+                    <option value="Limpeza">Limpeza (Verde)</option>
+                    <option value="Reparo">Reparo (Laranja)</option>
+                    <option value="Outro">Outro (Cinza)</option>
+                  </select>
+                </div>
               </div>
 
               {/* Lista de Itens do Bloco */}
