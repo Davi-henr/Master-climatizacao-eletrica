@@ -38,10 +38,10 @@ export default function LoginPage() {
       const { data, error: sbError } = await supabase
         .from('funcionarios')
         .select('id, nome, senha')
-        .eq('nome', username)
-        .single();
+        .ilike('nome', username.trim())
+        .maybeSingle();
         
-      if (sbError || !data || data.senha !== password) {
+      if (sbError || !data || data.senha !== password.trim()) {
         setError('Usuário ou senha inválidos.');
         setLoading(false);
         return;
