@@ -136,6 +136,19 @@ export default function OrcamentosPage() {
     try {
       const { error } = await supabase.from('orcamentos_os').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
+      
+      // Se estava finalizada, o sistema havia gerado um recebimento no financeiro. Precisamos excluir para não duplicar se finalizar de novo.
+      if (currentStatus === 'os_finalizada') {
+        const orcamento = orcamentos.find(o => o.id === id);
+        if (orcamento) {
+          const descricaoFin = `Recebimento ref. O.S. de ${orcamento.cliente?.nome}`;
+          await supabase.from('financeiro')
+            .delete()
+            .eq('descricao', descricaoFin)
+            .eq('valor', orcamento.valor_total);
+        }
+      }
+
       fetchOrcamentos();
     } catch (error) {
       console.error('Erro ao reverter:', error);
