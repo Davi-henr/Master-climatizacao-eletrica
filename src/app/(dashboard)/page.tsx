@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { TrendingUp, FileText, CalendarDays, Wallet, CheckCircle, Clock, Eye } from 'lucide-react';

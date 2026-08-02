@@ -95,14 +95,7 @@ export default function LoginPage() {
     router.push('/');
     router.refresh();
   };
-    if (username === 'MasterEletrica' && password === 'Master123') {
-      document.cookie = 'master_auth=true; path=/; max-age=86400';
-      router.push('/');
-      router.refresh();
-    } else {
-      setError('Usuário ou senha inválidos.');
-    }
-  };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
