@@ -224,7 +224,9 @@ export default function EditarOrcamentoPage() {
             equipamento_id: bloco.equipamentoId || null,
             tipo_custo: item.tipo_custo,
             quantidade: item.quantidade,
-            subtotal: item.preco * item.quantidade
+            valor_unitario: item.preco,
+            subtotal: item.preco * item.quantidade,
+            tipo_servico: bloco.tipoServico || 'Instalação'
           });
         });
       });
