@@ -12,7 +12,8 @@ import {
   Users,
   Wallet,
   History,
-  X
+  X,
+  LineChart
 } from 'lucide-react';
 
 const mainNavItems = [
@@ -107,13 +108,21 @@ export default function BottomNav() {
                 <span className="font-bold text-slate-700">Financeiro</span>
                 <span className="text-xs text-slate-500 text-center mt-1">Caixa, Receitas e Despesas</span>
               </Link>
+
+              <Link href="/relatorio" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-indigo-50 hover:border-indigo-200 transition-colors">
+                <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-indigo-600 mb-3">
+                  <LineChart size={24} />
+                </div>
+                <span className="font-bold text-slate-700">Relatórios</span>
+                <span className="text-xs text-slate-500 text-center mt-1">Métricas e gráficos gerais</span>
+              </Link>
               
-              <Link href="/historico" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-green-50 hover:border-green-200 transition-colors col-span-2">
+              <Link href="/historico" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-green-50 hover:border-green-200 transition-colors">
                 <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-green-600 mb-3">
                   <History size={24} />
                 </div>
-                <span className="font-bold text-slate-700">Histórico de Serviços</span>
-                <span className="text-xs text-slate-500 text-center mt-1">Busque serviços finalizados, relatórios e contagem de dias</span>
+                <span className="font-bold text-slate-700">Histórico</span>
+                <span className="text-xs text-slate-500 text-center mt-1">Busque serviços finalizados</span>
               </Link>
             </div>
           </div>
