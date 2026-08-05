@@ -57,7 +57,7 @@ export default function EditarOrcamentoPage() {
     // Fetch Cadastros
     const [clientesRes, precosRes, orcamentoRes] = await Promise.all([
       supabase.from('clientes').select('*, equipamentos(*)').order('nome'),
-      supabase.from('tabela_precos').select('*, servico_materiais(quantidade, material:tabela_precos!material_id(id, nome_item, valor_padrao))').order('nome_item'),
+      supabase.from('tabela_precos').select('*, servico_materiais!servico_id(quantidade, material:tabela_precos!material_id(id, nome_item, valor_padrao))').order('nome_item'),
       supabase.from('orcamentos_os').select(`
         *,
         itens_os(
