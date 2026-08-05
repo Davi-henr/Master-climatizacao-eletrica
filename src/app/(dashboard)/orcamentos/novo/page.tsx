@@ -50,7 +50,7 @@ export default function NovoOrcamentoPage() {
     const { data: cData } = await supabase.from('clientes').select('id, nome, equipamentos(id, descricao, local)').order('nome');
     if (cData) setClientes(cData);
 
-    const { data: pData } = await supabase.from('tabela_precos').select('*').order('nome_item');
+    const { data: pData } = await supabase.from('tabela_precos').select('*, servico_materiais(quantidade, material:tabela_precos!material_id(id, nome_item, valor_padrao))').order('nome_item');
     if (pData) setTabelaPrecos(pData);
   };
 
@@ -89,6 +89,20 @@ export default function NovoOrcamentoPage() {
       newBlocos[bIndex].itens[iIndex].nome = precoRef.nome_item;
       newBlocos[bIndex].itens[iIndex].tipo_custo = precoRef.tipo === 'peca' ? 'material' : 'mao_de_obra';
       newBlocos[bIndex].itens[iIndex].valor_unitario = precoRef.valor_padrao;
+
+      if (precoRef.servico_materiais && precoRef.servico_materiais.length > 0) {
+        precoRef.servico_materiais.forEach((mat: any) => {
+          if (mat.material) {
+            newBlocos[bIndex].itens.push({
+              tabelaId: mat.material.id,
+              nome: mat.material.nome_item,
+              tipo_custo: 'material',
+              quantidade: mat.quantidade,
+              valor_unitario: mat.material.valor_padrao
+            });
+          }
+        });
+      }
     } else {
       newBlocos[bIndex].itens[iIndex].tabelaId = '';
       newBlocos[bIndex].itens[iIndex].nome = '';

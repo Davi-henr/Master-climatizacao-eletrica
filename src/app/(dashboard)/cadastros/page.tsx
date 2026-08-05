@@ -20,11 +20,12 @@ export default function CadastrosPage() {
   const [editingFuncionarioId, setEditingFuncionarioId] = useState<string | null>(null);
   const [editingServicoId, setEditingServicoId] = useState<string | null>(null);
 
-  const [novoCliente, setNovoCliente] = useState({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '' });
+  const [novoCliente, setNovoCliente] = useState({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '', tipo_pessoa: 'F', documento: '' });
   const [equipamentosCliente, setEquipamentosCliente] = useState<any[]>([{ descricao: '', local: '' }]);
   
   const [novoFuncionario, setNovoFuncionario] = useState({ nome: '', cargo: '', valor_diaria: '', chave_pix: '' });
   const [novoServico, setNovoServico] = useState({ nome_item: '', tipo: 'mao_de_obra', valor_padrao: '' });
+  const [materiaisVinculados, setMateriaisVinculados] = useState<any[]>([]);
 
   const formatPhone = (val: string) => {
     const cleaned = val.replace(/\D/g, '');
@@ -32,6 +33,22 @@ export default function CadastrosPage() {
     if (cleaned.length <= 2) return `(${cleaned}`;
     if (cleaned.length <= 7) return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2)}`;
     return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 7)}-${cleaned.substring(7, 11)}`;
+  };
+
+  const formatDoc = (val: string, tipo: string) => {
+    const cleaned = val.replace(/\D/g, '');
+    if (tipo === 'F') { 
+      if (cleaned.length <= 3) return cleaned;
+      if (cleaned.length <= 6) return `${cleaned.substring(0,3)}.${cleaned.substring(3)}`;
+      if (cleaned.length <= 9) return `${cleaned.substring(0,3)}.${cleaned.substring(3,6)}.${cleaned.substring(6)}`;
+      return `${cleaned.substring(0,3)}.${cleaned.substring(3,6)}.${cleaned.substring(6,9)}-${cleaned.substring(9, 11)}`;
+    } else { 
+      if (cleaned.length <= 2) return cleaned;
+      if (cleaned.length <= 5) return `${cleaned.substring(0,2)}.${cleaned.substring(2)}`;
+      if (cleaned.length <= 8) return `${cleaned.substring(0,2)}.${cleaned.substring(2,5)}.${cleaned.substring(5)}`;
+      if (cleaned.length <= 12) return `${cleaned.substring(0,2)}.${cleaned.substring(2,5)}.${cleaned.substring(5,8)}/${cleaned.substring(8)}`;
+      return `${cleaned.substring(0,2)}.${cleaned.substring(2,5)}.${cleaned.substring(5,8)}/${cleaned.substring(8, 12)}-${cleaned.substring(12, 14)}`;
+    }
   };
 
   useEffect(() => {
@@ -47,7 +64,7 @@ export default function CadastrosPage() {
       const { data } = await supabase.from('funcionarios').select('*').order('nome');
       setFuncionarios(data || []);
     } else if (activeTab === 'servicos') {
-      const { data } = await supabase.from('tabela_precos').select('*').order('nome_item');
+      const { data } = await supabase.from('tabela_precos').select('*, servico_materiais(material_id, quantidade)').order('nome_item');
       setServicos(data || []);
     } else if (activeTab === 'empresa') {
       const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'logo_base64').single();
@@ -58,7 +75,7 @@ export default function CadastrosPage() {
 
   const resetClienteForm = () => {
     setEditingClienteId(null);
-    setNovoCliente({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '' });
+    setNovoCliente({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '', tipo_pessoa: 'F', documento: '' });
     setEquipamentosCliente([{ descricao: '', local: '' }]);
   };
 
@@ -69,7 +86,9 @@ export default function CadastrosPage() {
       telefone_whatsapp: c.telefone_whatsapp || '', 
       endereco_rua: c.endereco_rua || '',
       endereco_numero: c.endereco_numero || '',
-      endereco_bairro: c.endereco_bairro || ''
+      endereco_bairro: c.endereco_bairro || '',
+      tipo_pessoa: c.tipo_pessoa || 'F',
+      documento: c.documento || ''
     });
     setEquipamentosCliente(c.equipamentos?.length > 0 ? c.equipamentos : [{ descricao: '', local: '' }]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -137,6 +156,7 @@ export default function CadastrosPage() {
   const handleEditServico = (s: any) => {
     setEditingServicoId(s.id);
     setNovoServico({ nome_item: s.nome_item, tipo: s.tipo === 'peca' ? 'peca' : 'mao_de_obra', valor_padrao: String(s.valor_padrao) });
+    setMateriaisVinculados(s.servico_materiais || []);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -148,14 +168,37 @@ export default function CadastrosPage() {
       valor_padrao: Number(novoServico.valor_padrao.replace(',', '.'))
     };
 
+    let servicoId = editingServicoId;
+
     if (editingServicoId) {
       await supabase.from('tabela_precos').update(dataObj).eq('id', editingServicoId);
     } else {
-      await supabase.from('tabela_precos').insert(dataObj);
+      const { data: sData, error: sError } = await supabase.from('tabela_precos').insert(dataObj).select().single();
+      if (sError) {
+        alert('Erro ao salvar serviço. Detalhes no console.');
+        console.error(sError);
+        return;
+      }
+      servicoId = sData.id;
+    }
+
+    if (dataObj.tipo === 'servico' && servicoId) {
+      await supabase.from('servico_materiais').delete().eq('servico_id', servicoId);
+      
+      const matToInsert = materiaisVinculados.filter(m => m.material_id).map(m => ({
+        servico_id: servicoId,
+        material_id: m.material_id,
+        quantidade: m.quantidade
+      }));
+
+      if (matToInsert.length > 0) {
+        await supabase.from('servico_materiais').insert(matToInsert);
+      }
     }
 
     setEditingServicoId(null);
     setNovoServico({ nome_item: '', tipo: 'mao_de_obra', valor_padrao: '' });
+    setMateriaisVinculados([]);
     fetchData();
   };
 
@@ -237,11 +280,24 @@ export default function CadastrosPage() {
                 )}
               </div>
               
-              <div>
-                <input type="text" required placeholder="Nome do Cliente" value={novoCliente.nome} onChange={e => setNovoCliente({...novoCliente, nome: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input type="text" required placeholder="Nome do Cliente" value={novoCliente.nome} onChange={e => setNovoCliente({...novoCliente, nome: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
                 <input type="text" required placeholder="WhatsApp (14) 99999-9999" maxLength={15} value={novoCliente.telefone_whatsapp} onChange={e => setNovoCliente({...novoCliente, telefone_whatsapp: formatPhone(e.target.value)})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+              </div>
+
+              <div className="flex gap-4 mb-2 items-center">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input type="radio" checked={novoCliente.tipo_pessoa === 'F'} onChange={() => setNovoCliente({...novoCliente, tipo_pessoa: 'F', documento: ''})} />
+                  Pessoa Física (CPF)
+                </label>
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input type="radio" checked={novoCliente.tipo_pessoa === 'J'} onChange={() => setNovoCliente({...novoCliente, tipo_pessoa: 'J', documento: ''})} />
+                  Pessoa Jurídica (CNPJ)
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input type="text" placeholder={novoCliente.tipo_pessoa === 'F' ? 'CPF' : 'CNPJ'} value={novoCliente.documento} onChange={e => setNovoCliente({...novoCliente, documento: formatDoc(e.target.value, novoCliente.tipo_pessoa)})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
                 <input type="text" placeholder="Bairro" value={novoCliente.endereco_bairro} onChange={e => setNovoCliente({...novoCliente, endereco_bairro: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
               </div>
               <div className="grid grid-cols-4 gap-4">
@@ -291,7 +347,7 @@ export default function CadastrosPage() {
                   {clientes.map(c => (
                     <div key={c.id} className={`p-3 rounded-xl border flex justify-between items-start ${editingClienteId === c.id ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100'}`}>
                       <div>
-                        <p className="font-bold text-slate-800">{c.nome}</p>
+                        <p className="font-bold text-slate-800">{c.nome} {c.documento && <span className="text-xs font-normal text-slate-500 ml-2">({c.documento})</span>}</p>
                         <p className="text-sm text-slate-500">{c.telefone_whatsapp}</p>
                         {c.endereco_rua && (
                           <p className="text-xs text-slate-500 mt-1">
@@ -385,7 +441,7 @@ export default function CadastrosPage() {
                   {editingServicoId ? 'Editar Item' : 'Novo Item / Mão de Obra'}
                 </h3>
                 {editingServicoId && (
-                  <button type="button" onClick={() => { setEditingServicoId(null); setNovoServico({nome_item:'', tipo:'mao_de_obra', valor_padrao:''})}} className="text-sm text-slate-500 underline">Cancelar Edição</button>
+                  <button type="button" onClick={() => { setEditingServicoId(null); setNovoServico({nome_item:'', tipo:'mao_de_obra', valor_padrao:''}); setMateriaisVinculados([])}} className="text-sm text-slate-500 underline">Cancelar Edição</button>
                 )}
               </div>
               
@@ -404,6 +460,45 @@ export default function CadastrosPage() {
                 <input type="text" required placeholder={novoServico.tipo === 'mao_de_obra' ? 'Ex: Limpeza de Split' : 'Ex: Tubulação (Metro)'} value={novoServico.nome_item} onChange={e => setNovoServico({...novoServico, nome_item: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
                 <input type="text" required placeholder="Valor Padrão" value={novoServico.valor_padrao} onChange={e => setNovoServico({...novoServico, valor_padrao: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
               </div>
+
+              {novoServico.tipo === 'mao_de_obra' && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Materiais Vinculados (Inclusos na Mão de Obra)</h4>
+                  {materiaisVinculados.map((mv, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <select 
+                        value={mv.material_id} 
+                        onChange={(e) => {
+                          const list = [...materiaisVinculados]; list[idx].material_id = e.target.value; setMateriaisVinculados(list);
+                        }} 
+                        className="flex-1 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm bg-white"
+                      >
+                        <option value="">Selecione um material...</option>
+                        {servicos.filter(s => s.tipo === 'peca').map(s => (
+                          <option key={s.id} value={s.id}>{s.nome_item} (R$ {s.valor_padrao})</option>
+                        ))}
+                      </select>
+                      <input 
+                        type="number" min="0.1" step="0.1" placeholder="Qtd" 
+                        value={mv.quantidade} 
+                        onChange={e => {
+                          const list = [...materiaisVinculados]; list[idx].quantidade = Number(e.target.value); setMateriaisVinculados(list);
+                        }} 
+                        className="w-20 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm" 
+                      />
+                      <button type="button" onClick={() => {
+                        const list = [...materiaisVinculados]; list.splice(idx, 1); setMateriaisVinculados(list);
+                      }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setMateriaisVinculados([...materiaisVinculados, { material_id: '', quantidade: 1 }])} className="text-sm font-bold text-brand-blue flex items-center gap-1 mt-2">
+                    <Plus size={14} /> Adicionar material
+                  </button>
+                </div>
+              )}
+
               <button type="submit" className="w-full py-2 bg-brand-blue text-white rounded-lg font-medium">
                 {editingServicoId ? 'Atualizar Tabela' : 'Salvar na Tabela'}
               </button>

@@ -57,7 +57,7 @@ export default function EditarOrcamentoPage() {
     // Fetch Cadastros
     const [clientesRes, precosRes, orcamentoRes] = await Promise.all([
       supabase.from('clientes').select('*, equipamentos(*)').order('nome'),
-      supabase.from('tabela_precos').select('*').order('nome_item'),
+      supabase.from('tabela_precos').select('*, servico_materiais(quantidade, material:tabela_precos!material_id(id, nome_item, valor_padrao))').order('nome_item'),
       supabase.from('orcamentos_os').select(`
         *,
         itens_os(
@@ -136,14 +136,29 @@ export default function EditarOrcamentoPage() {
 
     setBlocos(blocos.map(b => {
       if (b.id === blocoId) {
+        const novosItens = [...b.itens, {
+          itemTabelaId,
+          quantidade: 1,
+          tipo_custo: servico.tipo === 'peca' ? 'material' : 'mao_de_obra',
+          preco: servico.valor_padrao
+        }];
+
+        if (servico.servico_materiais && servico.servico_materiais.length > 0) {
+          servico.servico_materiais.forEach((mat: any) => {
+            if (mat.material) {
+              novosItens.push({
+                itemTabelaId: mat.material.id,
+                quantidade: mat.quantidade,
+                tipo_custo: 'material',
+                preco: mat.material.valor_padrao
+              });
+            }
+          });
+        }
+
         return {
           ...b,
-          itens: [...b.itens, {
-            itemTabelaId,
-            quantidade: 1,
-            tipo_custo: servico.tipo === 'peca' ? 'material' : 'mao_de_obra',
-            preco: servico.valor_padrao
-          }]
+          itens: novosItens
         };
       }
       return b;
