@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Users, Briefcase, Wrench, Settings, Plus, Image as ImageIcon, Trash2, Edit } from 'lucide-react';
+import { Users, Briefcase, Wrench, Settings, Plus, Image as ImageIcon, Trash2, Edit, Copy } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 
 export default function CadastrosPage() {
@@ -20,8 +20,8 @@ export default function CadastrosPage() {
   const [editingFuncionarioId, setEditingFuncionarioId] = useState<string | null>(null);
   const [editingServicoId, setEditingServicoId] = useState<string | null>(null);
 
-  const [novoCliente, setNovoCliente] = useState({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '', tipo_pessoa: 'F', documento: '' });
-  const [equipamentosCliente, setEquipamentosCliente] = useState<any[]>([{ descricao: '', local: '' }]);
+  const [novoCliente, setNovoCliente] = useState({ nome: '', telefone_whatsapp: '', cep: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', tipo_pessoa: 'F', documento: '' });
+  const [equipamentosCliente, setEquipamentosCliente] = useState<any[]>([{ tipo: 'ar-condicionado', descricao: '', marca: '', btus: '', local: 'Quarto' }]);
   
   const [novoFuncionario, setNovoFuncionario] = useState({ nome: '', cargo: '', valor_diaria: '', chave_pix: '' });
   const [novoServico, setNovoServico] = useState({ nome_item: '', tipo: 'mao_de_obra', valor_padrao: '' });
@@ -58,7 +58,7 @@ export default function CadastrosPage() {
   const fetchData = async () => {
     setLoading(true);
     if (activeTab === 'clientes') {
-      const { data } = await supabase.from('clientes').select('*, equipamentos(id, descricao, local)').order('nome');
+      const { data } = await supabase.from('clientes').select('*, equipamentos(id, tipo, descricao, marca, btus, local)').order('nome');
       setClientes(data || []);
     } else if (activeTab === 'funcionarios') {
       const { data } = await supabase.from('funcionarios').select('*').order('nome');
@@ -75,8 +75,8 @@ export default function CadastrosPage() {
 
   const resetClienteForm = () => {
     setEditingClienteId(null);
-    setNovoCliente({ nome: '', telefone_whatsapp: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '', tipo_pessoa: 'F', documento: '' });
-    setEquipamentosCliente([{ descricao: '', local: '' }]);
+    setNovoCliente({ nome: '', telefone_whatsapp: '', cep: '', endereco_rua: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', tipo_pessoa: 'F', documento: '' });
+    setEquipamentosCliente([{ tipo: 'ar-condicionado', descricao: '', marca: '', btus: '', local: 'Quarto' }]);
   };
 
   const handleEditCliente = (c: any) => {
@@ -84,14 +84,45 @@ export default function CadastrosPage() {
     setNovoCliente({ 
       nome: c.nome, 
       telefone_whatsapp: c.telefone_whatsapp || '', 
+      cep: c.cep || '',
       endereco_rua: c.endereco_rua || '',
       endereco_numero: c.endereco_numero || '',
       endereco_bairro: c.endereco_bairro || '',
+      endereco_cidade: c.endereco_cidade || '',
+      endereco_estado: c.endereco_estado || '',
       tipo_pessoa: c.tipo_pessoa || 'F',
       documento: c.documento || ''
     });
-    setEquipamentosCliente(c.equipamentos?.length > 0 ? c.equipamentos : [{ descricao: '', local: '' }]);
+    setEquipamentosCliente(c.equipamentos?.length > 0 ? c.equipamentos : [{ tipo: 'ar-condicionado', descricao: '', marca: '', btus: '', local: 'Quarto' }]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    let cep = e.target.value.replace(/\D/g, '');
+    if (cep.length > 8) cep = cep.slice(0, 8);
+    let formatted = cep;
+    if (cep.length > 5) formatted = `${cep.slice(0, 5)}-${cep.slice(5)}`;
+    
+    setNovoCliente(prev => ({ ...prev, cep: formatted }));
+
+    if (cep.length === 8) {
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await response.json();
+        if (!data.erro) {
+          setNovoCliente(prev => ({
+            ...prev,
+            cep: formatted,
+            endereco_rua: data.logradouro || prev.endereco_rua,
+            endereco_bairro: data.bairro || prev.endereco_bairro,
+            endereco_cidade: data.localidade || prev.endereco_cidade,
+            endereco_estado: data.uf || prev.endereco_estado,
+          }));
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP', error);
+      }
+    }
   };
 
   const saveCliente = async (e: React.FormEvent) => {
@@ -107,16 +138,21 @@ export default function CadastrosPage() {
         clienteId = cData.id;
       }
 
-      // Deleta equipamentos antigos e insere os novos (forma mais simples de atualizar a lista)
+      // Deleta equipamentos antigos e insere os novos
       if (editingClienteId) {
         await supabase.from('equipamentos').delete().eq('cliente_id', editingClienteId);
       }
 
-      const equipToInsert = equipamentosCliente.filter(eq => eq.descricao).map(eq => ({
-        cliente_id: clienteId,
-        descricao: eq.descricao,
-        local: eq.local
-      }));
+      const equipToInsert = equipamentosCliente
+        .filter(eq => eq.tipo === 'outro' ? eq.descricao : (eq.marca || eq.btus || eq.tipo))
+        .map(eq => ({
+          cliente_id: clienteId,
+          tipo: eq.tipo || 'ar-condicionado',
+          descricao: eq.tipo === 'outro' ? eq.descricao : `${[eq.marca, eq.btus ? `${eq.btus} BTUs` : ''].filter(Boolean).join(' ')}`.trim() || 'Ar-Condicionado',
+          marca: eq.marca || null,
+          btus: eq.btus || null,
+          local: eq.local
+        }));
 
       if (equipToInsert.length > 0) {
         await supabase.from('equipamentos').insert(equipToInsert);
@@ -126,6 +162,7 @@ export default function CadastrosPage() {
       fetchData();
     } catch (error) {
       alert('Erro ao salvar cliente.');
+      console.error(error);
     }
   };
 
@@ -298,40 +335,159 @@ export default function CadastrosPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input type="text" placeholder={novoCliente.tipo_pessoa === 'F' ? 'CPF' : 'CNPJ'} value={novoCliente.documento} onChange={e => setNovoCliente({...novoCliente, documento: formatDoc(e.target.value, novoCliente.tipo_pessoa)})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
-                <input type="text" placeholder="Bairro" value={novoCliente.endereco_bairro} onChange={e => setNovoCliente({...novoCliente, endereco_bairro: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
               </div>
-              <div className="grid grid-cols-4 gap-4">
-                <div className="col-span-3">
-                  <input type="text" placeholder="Rua / Avenida" value={novoCliente.endereco_rua} onChange={e => setNovoCliente({...novoCliente, endereco_rua: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+
+              {/* Endereço com CEP */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="CEP"
+                      value={novoCliente.cep}
+                      onChange={handleCepChange}
+                      maxLength={9}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input type="text" placeholder="Rua / Avenida" value={novoCliente.endereco_rua} onChange={e => setNovoCliente({...novoCliente, endereco_rua: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                  </div>
                 </div>
-                <div>
+
+                <div className="grid grid-cols-3 gap-3">
                   <input type="text" placeholder="Nº" value={novoCliente.endereco_numero} onChange={e => setNovoCliente({...novoCliente, endereco_numero: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                  <div className="col-span-2">
+                    <input type="text" placeholder="Bairro" value={novoCliente.endereco_bairro} onChange={e => setNovoCliente({...novoCliente, endereco_bairro: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <input type="text" placeholder="Cidade" value={novoCliente.endereco_cidade} onChange={e => setNovoCliente({...novoCliente, endereco_cidade: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                  </div>
+                  <input type="text" placeholder="UF" maxLength={2} value={novoCliente.endereco_estado} onChange={e => setNovoCliente({...novoCliente, endereco_estado: e.target.value.toUpperCase()})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
                 </div>
               </div>
-              
+
+              {/* Equipamentos */}
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Equipamentos do Cliente</h4>
                 {equipamentosCliente.map((eq, idx) => (
-                  <div key={idx} className="flex gap-2 relative">
-                    <input type="text" placeholder="Ex: Split 12.000 BTUs LG" value={eq.descricao} onChange={e => {
-                      const list = [...equipamentosCliente]; list[idx].descricao = e.target.value; setEquipamentosCliente(list);
-                    }} className="flex-1 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm" />
+                  <div key={idx} className="flex flex-col gap-2 bg-white p-3 rounded-lg border border-slate-200">
                     
-                    <input type="text" placeholder="Local: Quarto" value={eq.local} onChange={e => {
-                      const list = [...equipamentosCliente]; list[idx].local = e.target.value; setEquipamentosCliente(list);
-                    }} className="w-1/3 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm" />
-                    
-                    {equipamentosCliente.length > 1 && (
-                      <button type="button" onClick={() => {
-                        const list = [...equipamentosCliente]; list.splice(idx, 1); setEquipamentosCliente(list);
-                      }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
-                        <Trash2 size={18} />
+                    {/* Linha 1: Tipo + campos dinâmicos */}
+                    <div className="flex gap-2">
+                      <select
+                        value={eq.tipo || 'ar-condicionado'}
+                        onChange={e => {
+                          const list = [...equipamentosCliente];
+                          list[idx] = { ...list[idx], tipo: e.target.value, descricao: '', marca: '', btus: '' };
+                          setEquipamentosCliente(list);
+                        }}
+                        className="w-2/5 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm bg-slate-50"
+                      >
+                        <option value="ar-condicionado">Ar-Condicionado</option>
+                        <option value="outro">Outro</option>
+                      </select>
+
+                      {eq.tipo === 'outro' ? (
+                        <input
+                          type="text"
+                          placeholder="Ex: Geladeira Brastemp"
+                          value={eq.descricao || ''}
+                          onChange={e => {
+                            const list = [...equipamentosCliente];
+                            list[idx].descricao = e.target.value;
+                            setEquipamentosCliente(list);
+                          }}
+                          className="flex-1 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm"
+                        />
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            placeholder="Marca (LG, TCL...)"
+                            value={eq.marca || ''}
+                            onChange={e => {
+                              const list = [...equipamentosCliente];
+                              list[idx].marca = e.target.value;
+                              setEquipamentosCliente(list);
+                            }}
+                            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm"
+                          />
+                          <input
+                            type="text"
+                            placeholder="BTUs"
+                            value={eq.btus || ''}
+                            onChange={e => {
+                              const list = [...equipamentosCliente];
+                              list[idx].btus = e.target.value.replace(/\D/g, '');
+                              setEquipamentosCliente(list);
+                            }}
+                            className="w-24 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm"
+                          />
+                        </>
+                      )}
+                    </div>
+
+                    {/* Linha 2: Local + Botões */}
+                    <div className="flex gap-2 items-center">
+                      <select
+                        value={eq.local || 'Quarto'}
+                        onChange={e => {
+                          const list = [...equipamentosCliente];
+                          list[idx].local = e.target.value;
+                          setEquipamentosCliente(list);
+                        }}
+                        className="flex-1 px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm bg-slate-50"
+                      >
+                        <option value="Quarto">Quarto</option>
+                        <option value="Sala">Sala</option>
+                        <option value="Escritório">Escritório</option>
+                        <option value="Cozinha">Cozinha</option>
+                        <option value="Garagem">Garagem</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+
+                      {/* Botão Duplicar */}
+                      <button
+                        type="button"
+                        title="Duplicar equipamento"
+                        onClick={() => {
+                          const list = [...equipamentosCliente];
+                          list.splice(idx + 1, 0, { ...eq });
+                          setEquipamentosCliente(list);
+                        }}
+                        className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <Copy size={18} />
                       </button>
-                    )}
+
+                      {/* Botão Excluir */}
+                      {equipamentosCliente.length > 1 && (
+                        <button
+                          type="button"
+                          title="Excluir equipamento"
+                          onClick={() => {
+                            const list = [...equipamentosCliente];
+                            list.splice(idx, 1);
+                            setEquipamentosCliente(list);
+                          }}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
-                <button type="button" onClick={() => setEquipamentosCliente([...equipamentosCliente, { descricao: '', local: '' }])} className="text-sm font-bold text-brand-blue flex items-center gap-1 mt-2">
-                  <Plus size={14} /> Adicionar outro equipamento
+                <button
+                  type="button"
+                  onClick={() => setEquipamentosCliente([...equipamentosCliente, { tipo: 'ar-condicionado', descricao: '', marca: '', btus: '', local: 'Quarto' }])}
+                  className="text-sm font-bold text-brand-blue flex items-center gap-1 mt-2"
+                >
+                  <Plus size={14} /> Adicionar equipamento
                 </button>
               </div>
 
@@ -351,12 +507,12 @@ export default function CadastrosPage() {
                         <p className="text-sm text-slate-500">{c.telefone_whatsapp}</p>
                         {c.endereco_rua && (
                           <p className="text-xs text-slate-500 mt-1">
-                            {c.endereco_rua}, {c.endereco_numero} - {c.endereco_bairro}
+                            {c.endereco_rua}, {c.endereco_numero} - {c.endereco_bairro}{c.endereco_cidade ? `, ${c.endereco_cidade}` : ''}{c.endereco_estado ? ` - ${c.endereco_estado}` : ''}{c.cep ? `, ${c.cep}` : ''}
                           </p>
                         )}
                         {c.equipamentos?.length > 0 && (
                           <div className="mt-2 text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">
-                            <span className="font-bold">Equipamentos:</span> {c.equipamentos.map((e: any) => e.descricao).join(', ')}
+                            <span className="font-bold">Equipamentos:</span> {c.equipamentos.map((e: any) => `${e.descricao} (${e.local})`).join(', ')}
                           </div>
                         )}
                       </div>
