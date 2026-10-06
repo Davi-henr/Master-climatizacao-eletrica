@@ -205,7 +205,7 @@ export default function DashboardPage() {
     // Planejamento da Semana (OS Ativas ordenadas por data com urgência)
     const { data: ativasData } = await supabase
       .from('orcamentos_os')
-      .select('id, data_agendamento, urgencia, cliente:clientes(nome, endereco, endereco_rua, endereco_numero, endereco_bairro), itens_os(equipamentos(descricao, local))')
+      .select('id, data_agendamento, urgencia, cliente:clientes(nome, endereco, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, cep), itens_os(equipamentos(descricao, local))')
       .eq('status', 'os_ativa')
       .order('data_agendamento', { ascending: true })
       .limit(20);
@@ -257,7 +257,16 @@ export default function DashboardPage() {
 
     const enderecos = sorted.map(os => {
       const cli = Array.isArray(os.cliente) ? os.cliente[0] : os.cliente;
-      return cli?.endereco_rua ? `${cli.endereco_rua}, ${cli.endereco_numero} - ${cli.endereco_bairro}` : cli?.endereco;
+      if (cli?.endereco_rua) {
+        const parts = [
+          `${cli.endereco_rua}, ${cli.endereco_numero}`,
+          cli.endereco_bairro,
+          cli.endereco_cidade && cli.endereco_estado ? `${cli.endereco_cidade} - ${cli.endereco_estado}` : cli.endereco_cidade || cli.endereco_estado || '',
+          cli.cep || ''
+        ].filter(Boolean);
+        return parts.join(', ');
+      }
+      return cli?.endereco;
     }).filter(e => e);
 
     if (enderecos.length === 0) {
@@ -348,9 +357,17 @@ export default function DashboardPage() {
                   {cli?.endereco_rua ? (
                     <div className="flex items-center gap-1 mt-0.5">
                       <p className="text-xs text-slate-500">
-                        {cli.endereco_rua}, {cli.endereco_numero} - {cli.endereco_bairro}
+                        {cli.endereco_rua}, {cli.endereco_numero} - {cli.endereco_bairro}{cli.endereco_cidade ? `, ${cli.endereco_cidade}` : ''}{cli.endereco_estado ? ` - ${cli.endereco_estado}` : ''}
                       </p>
-                      <button onClick={() => handleOpenGoogleMaps(`${cli.endereco_rua}, ${cli.endereco_numero} - ${cli.endereco_bairro}`)} className="text-blue-500 p-1 hover:bg-blue-50 rounded" title="Abrir GPS">
+                      <button onClick={() => {
+                        const parts = [
+                          `${cli.endereco_rua}, ${cli.endereco_numero}`,
+                          cli.endereco_bairro,
+                          cli.endereco_cidade && cli.endereco_estado ? `${cli.endereco_cidade} - ${cli.endereco_estado}` : cli.endereco_cidade || cli.endereco_estado || '',
+                          cli.cep || ''
+                        ].filter(Boolean);
+                        handleOpenGoogleMaps(parts.join(', '));
+                      }} className="text-blue-500 p-1 hover:bg-blue-50 rounded" title="Abrir GPS">
                         <MapPin size={14}/>
                       </button>
                     </div>
