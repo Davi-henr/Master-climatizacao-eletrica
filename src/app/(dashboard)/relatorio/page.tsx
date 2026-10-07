@@ -56,18 +56,9 @@ export default function RelatorioPage() {
         const vTotal = Number(os.valor_total) || 0;
         receitaTotal += vTotal;
 
-        // Custo de material informado na finalização (prioridade), senão calcula pelos itens
-        const custoMatInformado = Number(os.custo_materiais_informado) || 0;
-        let osMaterialCost = 0;
-        if (custoMatInformado > 0) {
-          osMaterialCost = custoMatInformado;
-        } else {
-          os.itens_os?.forEach((item: any) => {
-            if (item.tipo_custo === 'material') {
-              osMaterialCost += (Number(item.subtotal) || 0);
-            }
-          });
-        }
+        // Custo de material: SOMENTE o que foi informado na finalização do serviço.
+        // NÃO usa os itens do orçamento pois aqueles são preços de VENDA, não de custo.
+        const osMaterialCost = Number(os.custo_materiais_informado) || 0;
         totalCustoMaterial += osMaterialCost;
 
         const tipo = os.tipo_servico || '';
