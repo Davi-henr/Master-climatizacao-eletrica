@@ -613,7 +613,7 @@ export default function CadastrosPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <input type="text" required placeholder={novoServico.tipo === 'mao_de_obra' ? 'Ex: Limpeza de Split' : 'Ex: Tubulação (Metro)'} value={novoServico.nome_item} onChange={e => setNovoServico({...novoServico, nome_item: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
+                <input type="text" required placeholder={novoServico.tipo === 'mao_de_obra' ? 'Ex: Higienização de Split' : 'Ex: Tubulação (Metro)'} value={novoServico.nome_item} onChange={e => setNovoServico({...novoServico, nome_item: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
                 <input type="text" required placeholder="Valor Padrão" value={novoServico.valor_padrao} onChange={e => setNovoServico({...novoServico, valor_padrao: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none" />
               </div>
 

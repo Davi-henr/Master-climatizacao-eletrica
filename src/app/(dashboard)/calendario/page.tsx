@@ -89,7 +89,7 @@ export default function CalendarioPage() {
 
   const getServiceColor = (tipo: string) => {
     if (tipo?.toLowerCase().includes('instalação')) return 'bg-blue-500';
-    if (tipo?.toLowerCase().includes('limpeza')) return 'bg-green-500';
+    if (tipo?.toLowerCase().includes('limpeza') || tipo?.toLowerCase().includes('higieniza')) return 'bg-green-500';
     if (tipo?.toLowerCase().includes('reparo')) return 'bg-orange-500';
     return 'bg-slate-400';
   };
@@ -235,7 +235,7 @@ export default function CalendarioPage() {
         {/* Legenda */}
         <div className="flex flex-wrap gap-3 mt-4 justify-center">
           <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium"><div className="w-2 h-2 rounded-full bg-blue-500" /> Instalação</div>
-          <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium"><div className="w-2 h-2 rounded-full bg-green-500" /> Limpeza</div>
+          <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium"><div className="w-2 h-2 rounded-full bg-green-500" /> Higienização</div>
           <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium"><div className="w-2 h-2 rounded-full bg-orange-500" /> Reparo</div>
           <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium"><div className="w-2 h-2 rounded-full bg-slate-400" /> Outro / Finalizado</div>
         </div>

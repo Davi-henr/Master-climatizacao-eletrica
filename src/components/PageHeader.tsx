@@ -30,20 +30,19 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
   };
 
   const fetchNotifications = async () => {
-    // Buscar todos os itens de OS de "Limpeza" para verificar as mais recentes de cada equipamento
+    // Buscar todos os itens de OS de "Higienização" para verificar as mais recentes de cada equipamento
     const { data, error } = await supabase
       .from('itens_os')
       .select(`
         equipamento_id,
         equipamento:equipamentos(descricao, local, cliente:clientes(nome, telefone_whatsapp)),
-        orcamento:orcamentos_os!inner(data_agendamento, status, tipo_servico)
+        orcamento:orcamentos_os!inner(data_agendamento, status, tipo_servico, meses_proxima_higienizacao)
       `)
-      .eq('orcamento.tipo_servico', 'Limpeza')
+      .in('orcamento.tipo_servico', ['Limpeza', 'Higienização'])
       .not('equipamento_id', 'is', null);
 
     if (error || !data) return;
 
-    const limitDays = 180;
     const now = new Date().getTime();
     const mapEquip = new Map();
 
@@ -63,9 +62,12 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
 
     const overdues: any[] = [];
     mapEquip.forEach((value) => {
+      const limitMonths = value.orcamento?.meses_proxima_higienizacao || 6;
+      const limitDays = limitMonths * 30; // Aproximação de meses para dias
+      
       const daysPassed = Math.floor((now - value.maxDate) / (1000 * 3600 * 24));
       if (daysPassed >= limitDays) {
-        overdues.push({ ...value, daysPassed });
+        overdues.push({ ...value, daysPassed, limitMonths });
       }
     });
 
@@ -125,7 +127,7 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
                   <Bell size={20} />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-800 text-lg">Limpezas Vencidas (+6 meses)</h3>
+                  <h3 className="font-black text-slate-800 text-lg">Higienizações Vencidas</h3>
                   <p className="text-xs text-slate-500">Notifique os clientes para manutenção preventiva.</p>
                 </div>
               </div>
@@ -139,7 +141,7 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
                 <div className="p-10 text-center text-slate-500">
                   <CheckCircle className="mx-auto text-green-500 mb-3" size={40} />
                   <p className="font-bold text-lg text-slate-700">Tudo em dia!</p>
-                  <p className="text-sm">Nenhum equipamento passou de 6 meses sem limpeza.</p>
+                  <p className="text-sm">Nenhum equipamento com higienização vencida.</p>
                 </div>
               ) : (
                 <div className="space-y-2 p-3">
@@ -147,7 +149,7 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
                     const eq = notif.equipamento;
                     const cli = Array.isArray(eq?.cliente) ? eq.cliente[0] : eq?.cliente;
                     const phone = cli?.telefone_whatsapp?.replace(/\D/g, '');
-                    const message = encodeURIComponent(`Olá ${cli?.nome}, tudo bem? Aqui é da Master Climatização. Notamos que a última manutenção/limpeza do seu equipamento (${eq?.descricao} - ${eq?.local}) foi há mais de 6 meses. Que tal agendarmos uma visita para garantir a qualidade do seu ar?`);
+                    const message = encodeURIComponent(`Olá ${cli?.nome}, tudo bem? Aqui é da Master Climatização. Notamos que a última manutenção/higienização do seu equipamento (${eq?.descricao} - ${eq?.local}) foi há mais de ${notif.limitMonths} meses. Que tal agendarmos uma visita para garantir a qualidade do seu ar?`);
                     
                     return (
                       <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-brand-orange/50 transition-colors">
@@ -155,7 +157,7 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
                           <h4 className="font-black text-slate-800">{cli?.nome}</h4>
                           <p className="text-sm font-bold text-brand-blue mt-1">{eq?.descricao} <span className="text-slate-400 font-normal">em</span> {eq?.local}</p>
                           <p className="text-xs text-slate-500 mt-2">
-                            Última Limpeza: <span className="font-bold text-slate-700">{new Date(notif.maxDate).toLocaleDateString('pt-BR')}</span> 
+                            Última Higienização: <span className="font-bold text-slate-700">{new Date(notif.maxDate).toLocaleDateString('pt-BR')}</span> 
                             <span className="text-red-500 font-bold ml-2">({notif.daysPassed} dias atrás)</span>
                           </p>
                         </div>

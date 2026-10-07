@@ -161,7 +161,7 @@ export default function DashboardPage() {
       const { data: limpezas } = await supabase
         .from('orcamentos_os')
         .select('id, data_agendamento, cliente:clientes(nome), itens_os(equipamentos(id, descricao, local))')
-        .eq('tipo_servico', 'Limpeza')
+        .in('tipo_servico', ['Limpeza', 'Higienização'])
         .eq('status', 'os_finalizada')
         .order('data_agendamento', { ascending: false });
         
@@ -477,7 +477,7 @@ export default function DashboardPage() {
             {/* Histórico Recente de Limpezas */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-green-50">
-                <h3 className="font-bold text-green-800 text-sm uppercase tracking-wider">Histórico de Limpezas Concluídas</h3>
+                <h3 className="font-bold text-green-800 text-sm uppercase tracking-wider">Histórico de Higienizações Concluídas</h3>
               </div>
               
               <div className="overflow-x-auto">

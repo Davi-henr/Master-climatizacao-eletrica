@@ -19,6 +19,7 @@ export default function NovoOrcamentoPage() {
   const [observacoes, setObservacoes] = useState('');
   const [urgencia, setUrgencia] = useState('Pouco Urgente');
   const [desconto, setDesconto] = useState<number | ''>('');
+  const [mesesProximaHigienizacao, setMesesProximaHigienizacao] = useState<number | ''>(6);
   
   // Blocos de Serviço
   const [blocos, setBlocos] = useState([{
@@ -148,7 +149,8 @@ export default function NovoOrcamentoPage() {
           valor_desconto: Number(desconto) || 0,
           observacoes: observacoes,
           urgencia: urgencia,
-          tipo_servico: blocos[0].tipoServico || 'Instalação'
+          tipo_servico: blocos[0].tipoServico || 'Instalação',
+          meses_proxima_higienizacao: Number(mesesProximaHigienizacao) || 6
         })
         .select()
         .single();
@@ -251,6 +253,15 @@ export default function NovoOrcamentoPage() {
               <option value="Muito Urgente">🔴 Muito Urgente</option>
             </select>
           </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-1">Meses p/ Próxima Higienização</label>
+            <input 
+              type="number" min="1" 
+              value={mesesProximaHigienizacao} onChange={e => setMesesProximaHigienizacao(e.target.value ? Number(e.target.value) : '')}
+              className="w-full px-3 py-3 border border-slate-200 rounded-xl outline-none bg-slate-50 text-sm font-medium"
+              placeholder="Ex: 6"
+            />
+          </div>
         </div>
 
         {/* Múltiplos Blocos de Serviço */}
@@ -295,7 +306,7 @@ export default function NovoOrcamentoPage() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white text-sm"
                 >
                   <option value="Instalação">Instalação (Azul)</option>
-                  <option value="Limpeza">Limpeza (Verde)</option>
+                  <option value="Higienização">Higienização (Verde)</option>
                   <option value="Reparo">Reparo (Laranja)</option>
                   <option value="Outro">Outro (Cinza)</option>
                 </select>
