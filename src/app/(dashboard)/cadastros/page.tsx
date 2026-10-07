@@ -64,7 +64,7 @@ export default function CadastrosPage() {
       const { data } = await supabase.from('funcionarios').select('*').order('nome');
       setFuncionarios(data || []);
     } else if (activeTab === 'servicos') {
-      const { data } = await supabase.from('tabela_precos').select('*, servico_materiais!servico_id(material_id, quantidade)').order('nome_item');
+      const { data } = await supabase.from('tabela_precos').select('*, servico_materiais!fk_servico_materiais_servico(material_id, quantidade)').order('nome_item');
       setServicos(data || []);
     } else if (activeTab === 'empresa') {
       const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'logo_base64').single();
