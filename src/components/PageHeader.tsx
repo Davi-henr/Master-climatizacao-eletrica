@@ -30,15 +30,16 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
   };
 
   const fetchNotifications = async () => {
-    // Buscar todos os itens de OS de "Higienização" para verificar as mais recentes de cada equipamento
+    // Buscar todos os itens de OS de "Higienização" que estão finalizados
     const { data, error } = await supabase
       .from('itens_os')
       .select(`
         equipamento_id,
-        equipamento:equipamentos(descricao, local, cliente:clientes(nome, telefone_whatsapp)),
-        orcamento:orcamentos_os!inner(data_agendamento, status, tipo_servico, meses_proxima_higienizacao)
+        equipamento:equipamentos(descricao, local, cliente:clientes(id, nome, telefone_whatsapp)),
+        orcamento:orcamentos_os!inner(id, data_agendamento, created_at, status, tipo_servico, meses_proxima_higienizacao, notificacao_enviada)
       `)
       .in('orcamento.tipo_servico', ['Limpeza', 'Higienização'])
+      .eq('orcamento.status', 'os_finalizada')
       .not('equipamento_id', 'is', null);
 
     if (error || !data) return;
@@ -47,9 +48,12 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
     const mapEquip = new Map();
 
     data.forEach((item: any) => {
-      if (!item.equipamento_id || !item.orcamento?.data_agendamento) return;
+      // Prioriza data_agendamento, senão created_at
+      const rawDate = item.orcamento?.data_agendamento || item.orcamento?.created_at;
+      if (!item.equipamento_id || !rawDate) return;
+      
       const equipId = item.equipamento_id;
-      const dateVal = new Date(item.orcamento.data_agendamento).getTime();
+      const dateVal = new Date(rawDate).getTime();
       
       if (!mapEquip.has(equipId)) {
         mapEquip.set(equipId, { ...item, maxDate: dateVal });
@@ -60,20 +64,72 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
       }
     });
 
-    const overdues: any[] = [];
+    const overduesByClient = new Map();
+    
     mapEquip.forEach((value) => {
       const limitMonths = value.orcamento?.meses_proxima_higienizacao || 6;
       const limitDays = limitMonths * 30; // Aproximação de meses para dias
       
       const daysPassed = Math.floor((now - value.maxDate) / (1000 * 3600 * 24));
       if (daysPassed >= limitDays) {
-        overdues.push({ ...value, daysPassed, limitMonths });
+        const cliId = Array.isArray(value.equipamento?.cliente) ? value.equipamento.cliente[0]?.id : value.equipamento?.cliente?.id;
+        
+        if (cliId) {
+          if (!overduesByClient.has(cliId)) {
+            overduesByClient.set(cliId, {
+              cliente: Array.isArray(value.equipamento?.cliente) ? value.equipamento.cliente[0] : value.equipamento?.cliente,
+              equipamentos: [],
+              daysPassed: daysPassed, // rastreia o mais atrasado
+              notificado: false,
+              orcamentoIdsToUpdate: []
+            });
+          }
+          
+          const clientGroup = overduesByClient.get(cliId);
+          clientGroup.equipamentos.push({
+            descricao: value.equipamento.descricao,
+            local: value.equipamento.local,
+            maxDate: value.maxDate,
+            daysPassed: daysPassed,
+            limitMonths: limitMonths
+          });
+          
+          clientGroup.orcamentoIdsToUpdate.push(value.orcamento.id);
+          
+          if (daysPassed > clientGroup.daysPassed) {
+            clientGroup.daysPassed = daysPassed;
+          }
+          
+          // Se qualquer um dos equipamentos atrasados já foi notificado
+          if (value.orcamento?.notificacao_enviada) {
+            clientGroup.notificado = true;
+          }
+        }
       }
     });
 
     // Sort by most overdue
+    const overdues = Array.from(overduesByClient.values());
     overdues.sort((a, b) => b.daysPassed - a.daysPassed);
     setNotifications(overdues);
+  };
+
+  const handleNotifyClient = async (notifIndex: number, orcamentoIds: string[], phone: string, message: string) => {
+    // Atualiza estado local primeiro para resposta rápida
+    const newNotifs = [...notifications];
+    newNotifs[notifIndex].notificado = true;
+    setNotifications(newNotifs);
+
+    // Abre WhatsApp
+    window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
+
+    // Atualiza no banco
+    if (orcamentoIds.length > 0) {
+      await supabase
+        .from('orcamentos_os')
+        .update({ notificacao_enviada: true })
+        .in('id', orcamentoIds);
+    }
   };
 
   const handleLogout = () => {
@@ -146,33 +202,50 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
               ) : (
                 <div className="space-y-2 p-3">
                   {notifications.map((notif, idx) => {
-                    const eq = notif.equipamento;
-                    const cli = Array.isArray(eq?.cliente) ? eq.cliente[0] : eq?.cliente;
+                    const cli = notif.cliente;
                     const phone = cli?.telefone_whatsapp?.replace(/\D/g, '');
-                    const message = encodeURIComponent(`Olá ${cli?.nome}, tudo bem? Aqui é da Master Climatização. Notamos que a última manutenção/higienização do seu equipamento (${eq?.descricao} - ${eq?.local}) foi há mais de ${notif.limitMonths} meses. Que tal agendarmos uma visita para garantir a qualidade do seu ar?`);
+                    
+                    const countEquips = notif.equipamentos.length;
+                    const equipListStr = notif.equipamentos.map((e: any) => `${e.descricao} em ${e.local}`).join(', ');
+                    
+                    const message = encodeURIComponent(
+                      `Olá ${cli?.nome}, tudo bem? Aqui é da Master Climatização. Notamos que a última higienização do(s) seu(s) equipamento(s) (${equipListStr}) está vencida ou prestes a vencer. Que tal agendarmos uma visita para garantir a qualidade do seu ar?`
+                    );
+                    
+                    const isNotified = notif.notificado;
                     
                     return (
-                      <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-brand-orange/50 transition-colors">
-                        <div>
-                          <h4 className="font-black text-slate-800">{cli?.nome}</h4>
-                          <p className="text-sm font-bold text-brand-blue mt-1">{eq?.descricao} <span className="text-slate-400 font-normal">em</span> {eq?.local}</p>
-                          <p className="text-xs text-slate-500 mt-2">
-                            Última Higienização: <span className="font-bold text-slate-700">{new Date(notif.maxDate).toLocaleDateString('pt-BR')}</span> 
-                            <span className="text-red-500 font-bold ml-2">({notif.daysPassed} dias atrás)</span>
-                          </p>
+                      <div key={idx} className={`bg-white p-4 rounded-2xl border ${isNotified ? 'border-green-200 bg-green-50/30 opacity-75' : 'border-slate-200 hover:border-brand-orange/50'} shadow-sm flex flex-col sm:flex-row justify-between sm:items-start gap-4 transition-all`}>
+                        <div className="flex-1">
+                          <h4 className="font-black text-slate-800 flex items-center gap-2">
+                            {cli?.nome} 
+                            {isNotified && <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full uppercase tracking-wider">Avisado</span>}
+                          </h4>
+                          <div className="mt-2 space-y-1">
+                            {notif.equipamentos.map((eq: any, i: number) => (
+                              <div key={i} className="text-sm">
+                                <span className="font-bold text-brand-blue">{eq.descricao}</span> <span className="text-slate-400 font-normal">em {eq.local}</span>
+                                <p className="text-[11px] text-slate-500">
+                                  Última: <span className="font-bold text-slate-700">{new Date(eq.maxDate).toLocaleDateString('pt-BR')}</span> 
+                                  <span className="text-red-500 font-bold ml-1">({eq.daysPassed} dias atrás)</span>
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        {phone ? (
-                          <a 
-                            href={`https://wa.me/55${phone}?text=${message}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm transition-colors shadow-lg shadow-green-500/20"
-                          >
-                            <MessageCircle size={18} /> Avisar Cliente
-                          </a>
-                        ) : (
-                          <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg text-center">Sem WhatsApp</span>
-                        )}
+                        <div className="mt-2 sm:mt-0">
+                          {phone ? (
+                            <button 
+                              onClick={() => handleNotifyClient(idx, notif.orcamentoIdsToUpdate, phone, message)}
+                              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-colors shadow-lg ${isNotified ? 'bg-slate-200 text-slate-600 hover:bg-slate-300 shadow-none' : 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/20'}`}
+                            >
+                              {isNotified ? <CheckCircle size={18} /> : <MessageCircle size={18} />} 
+                              {isNotified ? 'Reenviar Aviso' : 'Avisar Cliente'}
+                            </button>
+                          ) : (
+                            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg text-center block">Sem WhatsApp</span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
