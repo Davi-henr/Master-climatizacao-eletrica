@@ -19,7 +19,7 @@ export default function RelatorioPage() {
   const fetchData = async () => {
     setLoading(true);
     const [osRes, rhRes] = await Promise.all([
-      supabase.from('orcamentos_os').select('*, itens_os(*)').in('status', ['Aprovado', 'Finalizado']),
+      supabase.from('orcamentos_os').select('*, itens_os(*)').eq('status', 'os_finalizada'),
       supabase.from('rh_pagamentos').select('*')
     ]);
     if (osRes.data) setOsData(osRes.data);
@@ -32,42 +32,57 @@ export default function RelatorioPage() {
       name: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][i],
       Instalações: 0,
       Higienizações: 0,
+      Outros: 0,
     }));
 
     let totalInstalacoesQtd = 0;
     let totalInstalacoesValor = 0;
     let totalLimpezaQtd = 0;
     let totalLimpezaValor = 0;
+    let totalOutrosQtd = 0;
+    let totalOutrosValor = 0;
     let totalCustoMaterial = 0;
     let totalRH = 0;
     let receitaTotal = 0;
 
     osData.forEach(os => {
-      const dateStr = os.created_at;
+      // Usa data_agendamento com fallback para created_at
+      const dateStr = os.data_agendamento || os.created_at;
       if (!dateStr) return;
       const date = new Date(dateStr);
-      
+
       if (date.getFullYear().toString() === selectedYear) {
         const month = date.getMonth();
         const vTotal = Number(os.valor_total) || 0;
         receitaTotal += vTotal;
 
+        // Custo de material informado na finalização (prioridade), senão calcula pelos itens
+        const custoMatInformado = Number(os.custo_materiais_informado) || 0;
         let osMaterialCost = 0;
-        os.itens_os?.forEach((item: any) => {
-          if (item.tipo_custo === 'material') {
-            osMaterialCost += (Number(item.subtotal) || 0);
-          }
-        });
+        if (custoMatInformado > 0) {
+          osMaterialCost = custoMatInformado;
+        } else {
+          os.itens_os?.forEach((item: any) => {
+            if (item.tipo_custo === 'material') {
+              osMaterialCost += (Number(item.subtotal) || 0);
+            }
+          });
+        }
         totalCustoMaterial += osMaterialCost;
 
-        if (os.tipo_servico === 'Instalação') {
+        const tipo = os.tipo_servico || '';
+        if (tipo === 'Instalação') {
           totalInstalacoesQtd++;
           totalInstalacoesValor += vTotal;
           monthly[month].Instalações++;
-        } else if (os.tipo_servico === 'Limpeza' || os.tipo_servico === 'Higienização') {
+        } else if (tipo === 'Limpeza' || tipo === 'Higienização') {
           totalLimpezaQtd++;
           totalLimpezaValor += vTotal;
           monthly[month].Higienizações++;
+        } else {
+          totalOutrosQtd++;
+          totalOutrosValor += vTotal;
+          monthly[month].Outros++;
         }
       }
     });
@@ -81,7 +96,7 @@ export default function RelatorioPage() {
       }
     });
 
-    const lucroGeral = receitaTotal - totalCustoMaterial;
+    const lucroLiquido = receitaTotal - totalCustoMaterial - totalRH;
 
     return {
       monthly,
@@ -89,9 +104,11 @@ export default function RelatorioPage() {
       totalInstalacoesValor,
       totalLimpezaQtd,
       totalLimpezaValor,
+      totalOutrosQtd,
+      totalOutrosValor,
       totalCustoMaterial,
       totalRH,
-      lucroGeral,
+      lucroLiquido,
       receitaTotal
     };
   }, [osData, rhData, selectedYear]);
@@ -100,7 +117,8 @@ export default function RelatorioPage() {
     const years = new Set<string>();
     years.add(new Date().getFullYear().toString());
     osData.forEach(os => {
-      if (os.created_at) years.add(new Date(os.created_at).getFullYear().toString());
+      const d = os.data_agendamento || os.created_at;
+      if (d) years.add(new Date(d).getFullYear().toString());
     });
     return Array.from(years).sort().reverse();
   }, [osData]);
@@ -135,8 +153,8 @@ export default function RelatorioPage() {
         </div>
       </div>
 
-      {/* Cards Principais */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Cards Principais — 3 tipos de serviço */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         
         {/* Higienização */}
         <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-3xl p-6 text-white shadow-lg shadow-emerald-500/20 relative overflow-hidden group">
@@ -148,7 +166,7 @@ export default function RelatorioPage() {
               <Sparkles size={18} /> Total Higienizações
             </h3>
             <div className="flex items-end gap-3 mt-4">
-              <h2 className="text-4xl font-black">R$ {processedData.totalLimpezaValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
+              <h2 className="text-3xl font-black">R$ {processedData.totalLimpezaValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
             </div>
             <p className="text-emerald-50 text-sm mt-3 font-medium bg-white/10 inline-block px-3 py-1 rounded-lg backdrop-blur-sm border border-white/20">
               {processedData.totalLimpezaQtd} serviços realizados
@@ -166,7 +184,7 @@ export default function RelatorioPage() {
               <Wrench size={18} /> Total Instalações
             </h3>
             <div className="flex items-end gap-3 mt-4">
-              <h2 className="text-4xl font-black">R$ {processedData.totalInstalacoesValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
+              <h2 className="text-3xl font-black">R$ {processedData.totalInstalacoesValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
             </div>
             <p className="text-blue-50 text-sm mt-3 font-medium bg-white/10 inline-block px-3 py-1 rounded-lg backdrop-blur-sm border border-white/20">
               {processedData.totalInstalacoesQtd} serviços realizados
@@ -174,22 +192,38 @@ export default function RelatorioPage() {
           </div>
         </div>
 
+        {/* Outros Serviços */}
+        <div className="bg-gradient-to-br from-slate-600 to-slate-800 rounded-3xl p-6 text-white shadow-lg shadow-slate-500/20 relative overflow-hidden group">
+          <div className="absolute -top-6 -right-6 p-4 opacity-10 transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-500">
+            <DollarSign size={120} />
+          </div>
+          <div className="relative z-10">
+            <h3 className="font-medium text-slate-300 flex items-center gap-2 mb-1">
+              <DollarSign size={18} /> Outros Serviços
+            </h3>
+            <div className="flex items-end gap-3 mt-4">
+              <h2 className="text-3xl font-black">R$ {processedData.totalOutrosValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
+            </div>
+            <p className="text-slate-300 text-sm mt-3 font-medium bg-white/10 inline-block px-3 py-1 rounded-lg backdrop-blur-sm border border-white/20">
+              {processedData.totalOutrosQtd} serviços realizados
+            </p>
+          </div>
+        </div>
+
       </div>
 
-      {/* Cards Financeiros Menores */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Cards Financeiros */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         
-        {/* Lucro Bruto */}
+        {/* Receita Total */}
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-start gap-4">
           <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center text-green-600 shrink-0">
             <TrendingUp size={24} />
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-500 mb-1">Lucro Bruto (Receita - Materiais)</p>
-            <h3 className="text-2xl font-black text-slate-800">R$ {processedData.lucroGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Custo de materiais: <span className="font-medium text-red-400">R$ {processedData.totalCustoMaterial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-            </p>
+            <p className="text-sm font-bold text-slate-500 mb-1">Receita Total (Lucro Bruto)</p>
+            <h3 className="text-2xl font-black text-slate-800">R$ {processedData.receitaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+            <p className="text-xs text-slate-400 mt-1">Total recebido de serviços finalizados</p>
           </div>
         </div>
 
@@ -205,13 +239,30 @@ export default function RelatorioPage() {
           </div>
         </div>
 
+        {/* Lucro Líquido */}
+        <div className={`bg-white p-5 rounded-2xl border shadow-sm flex items-start gap-4 ${processedData.lucroLiquido >= 0 ? 'border-green-200' : 'border-red-200'}`}>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${processedData.lucroLiquido >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+            <TrendingUp size={24} />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-500 mb-1">Lucro Líquido</p>
+            <h3 className={`text-2xl font-black ${processedData.lucroLiquido >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              R$ {processedData.lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Materiais: <span className="font-medium text-red-400">-R$ {processedData.totalCustoMaterial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              {' | '}RH: <span className="font-medium text-red-400">-R$ {processedData.totalRH.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            </p>
+          </div>
+        </div>
+
       </div>
 
       {/* Gráfico Moderno */}
       <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm">
         <div className="mb-6">
           <h2 className="text-lg font-bold text-slate-800">Volume de Serviços no Ano</h2>
-          <p className="text-sm text-slate-500">Comparativo mensal de Instalações x Higienizações</p>
+          <p className="text-sm text-slate-500">Comparativo mensal por tipo de serviço</p>
         </div>
         
         <div className="h-[350px] w-full">
@@ -228,6 +279,7 @@ export default function RelatorioPage() {
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: '#94a3b8', fontSize: 12 }}
+                allowDecimals={false}
               />
               <Tooltip 
                 cursor={{ fill: '#f8fafc' }}
@@ -238,18 +290,9 @@ export default function RelatorioPage() {
                 iconType="circle" 
                 wrapperStyle={{ paddingTop: '20px', fontSize: '14px', fontWeight: 500 }}
               />
-              <Bar 
-                dataKey="Instalações" 
-                fill="#3b82f6" 
-                radius={[6, 6, 6, 6]} 
-                barSize={12}
-              />
-              <Bar 
-                dataKey="Higienizações" 
-                fill="#10b981" 
-                radius={[6, 6, 6, 6]} 
-                barSize={12}
-              />
+              <Bar dataKey="Instalações" fill="#3b82f6" radius={[6, 6, 6, 6]} barSize={12} />
+              <Bar dataKey="Higienizações" fill="#10b981" radius={[6, 6, 6, 6]} barSize={12} />
+              <Bar dataKey="Outros" fill="#64748b" radius={[6, 6, 6, 6]} barSize={12} />
             </BarChart>
           </ResponsiveContainer>
         </div>

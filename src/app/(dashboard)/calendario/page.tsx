@@ -42,6 +42,11 @@ export default function CalendarioPage() {
   const [novoAgendamento, setNovoAgendamento] = useState('');
   const [novoTecnico, setNovoTecnico] = useState('');
   const [loadingReschedule, setLoadingReschedule] = useState(false);
+
+  // Modal Finalizar com custo de materiais
+  const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+  const [osToFinalize, setOsToFinalize] = useState<OS | null>(null);
+  const [custoMateriais, setCustoMateriais] = useState<number | ''>('');
   
   const [role, setRole] = useState('admin');
 
@@ -178,19 +183,44 @@ export default function CalendarioPage() {
   // Detalhes da Data Selecionada
   const selectedDayOS = osList.filter(os => isSameDay(parseISO(os.data_agendamento), selectedDate));
 
-  const handleFinalizarOS = async (os: OS) => {
-    if (os.status === 'os_finalizada') return;
+  const openFinalizarModal = (os: OS) => {
+    setOsToFinalize(os);
+    setCustoMateriais('');
+    setIsMaterialModalOpen(true);
+  };
+
+  const handleConfirmarFinalizacao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!osToFinalize) return;
+
+    const os = osToFinalize;
     setFinishingId(os.id);
+    setIsMaterialModalOpen(false);
+
+    const custoMat = Number(custoMateriais) || 0;
 
     try {
-      const { error: osError } = await supabase.from('orcamentos_os').update({ status: 'os_finalizada' }).eq('id', os.id);
+      const { error: osError } = await supabase
+        .from('orcamentos_os')
+        .update({ status: 'os_finalizada', custo_materiais_informado: custoMat })
+        .eq('id', os.id);
       if (osError) throw osError;
 
+      // Lança receita no financeiro
       const { error: finError } = await supabase.from('financeiro').insert({
         tipo: 'receita', categoria: 'servico', valor: os.valor_total,
         descricao: `Recebimento ref. O.S. de ${os.cliente?.nome}`
       });
       if (finError) throw finError;
+
+      // Se informou custo de materiais, lança como despesa no financeiro
+      if (custoMat > 0) {
+        const { error: despError } = await supabase.from('financeiro').insert({
+          tipo: 'despesa', categoria: 'peca', valor: custoMat,
+          descricao: `Custo de materiais - O.S. de ${os.cliente?.nome}`
+        });
+        if (despError) throw despError;
+      }
 
       fetchActiveOS();
     } catch (error) {
@@ -198,6 +228,7 @@ export default function CalendarioPage() {
       alert('Erro ao finalizar.');
     } finally {
       setFinishingId(null);
+      setOsToFinalize(null);
     }
   };
 
@@ -295,7 +326,7 @@ export default function CalendarioPage() {
                       Remarcar
                     </button>
                     <button 
-                      onClick={() => handleFinalizarOS(os)}
+                      onClick={() => openFinalizarModal(os)}
                       disabled={finishingId === os.id}
                       className="w-2/3 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors text-sm shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
                     >
@@ -329,6 +360,51 @@ export default function CalendarioPage() {
                 <button type="button" onClick={() => setIsRescheduleModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
                 <button type="submit" disabled={loadingReschedule} className="flex-1 py-3 bg-brand-blue text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 disabled:opacity-50">
                   {loadingReschedule ? 'Salvando...' : 'Confirmar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Custo de Materiais ao Finalizar */}
+      {isMaterialModalOpen && osToFinalize && (
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in">
+            <h3 className="text-lg font-bold text-slate-800 mb-1">Finalizar e Receber</h3>
+            <p className="text-sm text-slate-500 mb-5">
+              O.S. de <span className="font-bold text-slate-700">{osToFinalize.cliente?.nome}</span> — valor: <span className="font-bold text-green-600">R$ {osToFinalize.valor_total?.toFixed(2).replace('.', ',')}</span>
+            </p>
+            <form onSubmit={handleConfirmarFinalizacao} className="space-y-5">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">
+                  Custo Total de Materiais (R$)
+                </label>
+                <p className="text-xs text-slate-400 mb-2">Informe o valor gasto com peças e materiais nesta O.S. (deixe 0 se não houver).</p>
+                <input 
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Ex: 150,00"
+                  value={custoMateriais}
+                  onChange={e => setCustoMateriais(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-lg font-bold"
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button 
+                  type="button" 
+                  onClick={() => { setIsMaterialModalOpen(false); setOsToFinalize(null); }} 
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg shadow-green-500/30 transition-colors flex items-center justify-center gap-2"
+                >
+                  <CheckCircle size={18} /> Confirmar
                 </button>
               </div>
             </form>
