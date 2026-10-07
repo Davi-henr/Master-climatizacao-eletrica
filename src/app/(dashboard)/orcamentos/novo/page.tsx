@@ -50,7 +50,7 @@ export default function NovoOrcamentoPage() {
     const { data: cData } = await supabase.from('clientes').select('id, nome, equipamentos(id, descricao, local)').order('nome');
     if (cData) setClientes(cData);
 
-    const { data: pData } = await supabase.from('tabela_precos').select('*, servico_materiais!servico_id(quantidade, material:tabela_precos!material_id(id, nome_item, valor_padrao))').order('nome_item');
+    const { data: pData } = await supabase.from('tabela_precos').select('*, servico_materiais!fk_servico_materiais_servico(quantidade, material:tabela_precos!fk_servico_materiais_material(id, nome_item, valor_padrao))').order('nome_item');
     if (pData) setTabelaPrecos(pData);
   };
 
