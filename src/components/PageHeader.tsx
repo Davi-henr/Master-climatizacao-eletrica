@@ -38,7 +38,7 @@ export default function PageHeader({ title, subtitle }: { title: string, subtitl
         equipamento:equipamentos(descricao, local, cliente:clientes(id, nome, telefone_whatsapp)),
         orcamento:orcamentos_os!inner(id, data_agendamento, created_at, status, tipo_servico, meses_proxima_higienizacao, notificacao_enviada)
       `)
-      .in('orcamento.tipo_servico', ['Limpeza', 'Higienização'])
+      .in('orcamento.tipo_servico', ['Limpeza', 'Higienização', 'Instalação'])
       .eq('orcamento.status', 'os_finalizada')
       .not('equipamento_id', 'is', null);
 
