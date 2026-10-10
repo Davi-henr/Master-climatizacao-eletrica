@@ -70,7 +70,7 @@ export default function CalendarioPage() {
     const { data, error } = await supabase
       .from('orcamentos_os')
       .select(`
-        id, status, tipo_servico, data_agendamento, valor_total,
+        id, status, tipo_servico, data_agendamento, valor_total, tecnicos_ids,
         cliente:clientes(nome),
         tecnico:funcionarios(id, nome)
       `)
@@ -305,7 +305,11 @@ export default function CalendarioPage() {
                 
                 <div className="space-y-1 mb-4">
                   <p className="text-sm font-medium text-slate-700">Cliente: <span className="font-bold text-slate-900">{os.cliente?.nome}</span></p>
-                  <p className="text-sm font-medium text-slate-700">Técnico: <span className="font-bold text-slate-900">{os.tecnico?.nome}</span></p>
+                  <p className="text-sm font-medium text-slate-700">Técnico(s): <span className="font-bold text-slate-900">
+                    {os.tecnicos_ids && os.tecnicos_ids.length > 1 
+                      ? `${os.tecnico?.nome} e mais ${os.tecnicos_ids.length - 1}` 
+                      : os.tecnico?.nome}
+                  </span></p>
                   <p className="text-sm font-medium text-slate-700">Horário: <span className="font-bold text-brand-orange">{format(parseISO(os.data_agendamento), 'HH:mm')}</span></p>
                   {role !== 'funcionario' && (
                     <p className="text-sm font-medium text-slate-700 mt-2">Valor: R$ {os.valor_total.toFixed(2).replace('.', ',')}</p>

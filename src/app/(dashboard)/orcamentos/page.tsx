@@ -31,7 +31,7 @@ export default function OrcamentosPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedOrcamento, setSelectedOrcamento] = useState<string | null>(null);
   const [agendamento, setAgendamento] = useState('');
-  const [tecnicoId, setTecnicoId] = useState('');
+  const [tecnicoIds, setTecnicoIds] = useState<string[]>([]);
   const [loadingAprovacao, setLoadingAprovacao] = useState(false);
 
   // Filtro
@@ -89,7 +89,7 @@ export default function OrcamentosPage() {
 
   const handleAprovar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrcamento || !agendamento || !tecnicoId) return;
+    if (!selectedOrcamento || !agendamento || tecnicoIds.length === 0) return;
     
     setLoadingAprovacao(true);
     try {
@@ -98,7 +98,8 @@ export default function OrcamentosPage() {
         .update({
           status: 'os_ativa',
           data_agendamento: new Date(agendamento).toISOString(),
-          tecnico_id: tecnicoId
+          tecnico_id: tecnicoIds[0], // Mantém compatibilidade com funções antigas
+          tecnicos_ids: tecnicoIds
         })
         .eq('id', selectedOrcamento);
 
@@ -278,7 +279,7 @@ export default function OrcamentosPage() {
                       <MessageCircle size={16} /> Zap
                     </button>
                     <button 
-                      onClick={() => { setSelectedOrcamento(orcamento.id); setIsModalOpen(true); }}
+                      onClick={() => { setSelectedOrcamento(orcamento.id); setTecnicoIds([]); setIsModalOpen(true); }}
                       className="flex-1 flex justify-center items-center gap-1 py-2 bg-brand-blue text-white rounded-lg text-sm font-bold shadow-sm"
                     >
                       <CalendarDays size={16} /> Agendar
@@ -339,16 +340,32 @@ export default function OrcamentosPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Técnico Responsável</label>
-                <select 
-                  required value={tecnicoId} onChange={e => setTecnicoId(e.target.value)}
-                  className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
-                >
-                  <option value="">Selecione...</option>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Técnicos Responsáveis</label>
+                <div className="space-y-2 max-h-40 overflow-y-auto bg-slate-50 border border-slate-200 rounded-xl p-3">
                   {funcionarios.map(func => (
-                    <option key={func.id} value={func.id}>{func.nome}</option>
+                    <label key={func.id} className="flex items-center gap-3 cursor-pointer p-1">
+                      <input 
+                        type="checkbox"
+                        checked={tecnicoIds.includes(func.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setTecnicoIds([...tecnicoIds, func.id]);
+                          } else {
+                            setTecnicoIds(tecnicoIds.filter(id => id !== func.id));
+                          }
+                        }}
+                        className="w-4 h-4 text-brand-blue rounded border-slate-300 focus:ring-brand-blue"
+                      />
+                      <span className="text-sm font-medium text-slate-700">{func.nome}</span>
+                    </label>
                   ))}
-                </select>
+                  {funcionarios.length === 0 && (
+                    <p className="text-xs text-slate-500 text-center py-2">Nenhum funcionário encontrado.</p>
+                  )}
+                </div>
+                {tecnicoIds.length === 0 && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">Selecione pelo menos um técnico.</p>
+                )}
               </div>
 
               <button 
