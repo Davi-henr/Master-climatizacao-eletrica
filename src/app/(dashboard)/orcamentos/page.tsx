@@ -140,15 +140,18 @@ export default function OrcamentosPage() {
       const { error } = await supabase.from('orcamentos_os').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
       
-      // Se estava finalizada, o sistema havia gerado um recebimento no financeiro. Precisamos excluir para não duplicar se finalizar de novo.
+      // Se estava finalizada, o sistema havia gerado lançamentos no financeiro (receita/custo). Exclui para não duplicar.
       if (currentStatus === 'os_finalizada') {
+        // Tenta excluir pelo os_id (novo padrão confiável)
+        await supabase.from('financeiro').delete().eq('os_id', id);
+        
+        // Fallback para OS antigas que não tinham os_id gravado no financeiro
         const orcamento = orcamentos.find(o => o.id === id);
         if (orcamento) {
           const descricaoFin = `Recebimento ref. O.S. de ${orcamento.cliente?.nome}`;
-          await supabase.from('financeiro')
-            .delete()
-            .eq('descricao', descricaoFin)
-            .eq('valor', orcamento.valor_total);
+          const descricaoMat = `Custo de materiais - O.S. de ${orcamento.cliente?.nome}`;
+          await supabase.from('financeiro').delete().eq('descricao', descricaoFin).eq('valor', orcamento.valor_total);
+          await supabase.from('financeiro').delete().eq('descricao', descricaoMat);
         }
       }
 

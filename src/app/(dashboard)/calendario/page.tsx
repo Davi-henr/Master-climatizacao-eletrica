@@ -27,6 +27,8 @@ type OS = {
   valor_total: number;
   cliente: { nome: string };
   tecnico: { id: string; nome: string };
+  tecnicos_ids?: string[];
+  custo_materiais_informado?: number;
 };
 
 export default function CalendarioPage() {
@@ -209,7 +211,8 @@ export default function CalendarioPage() {
       // Lança receita no financeiro
       const { error: finError } = await supabase.from('financeiro').insert({
         tipo: 'receita', categoria: 'servico', valor: os.valor_total,
-        descricao: `Recebimento ref. O.S. de ${os.cliente?.nome}`
+        descricao: `Recebimento ref. O.S. de ${os.cliente?.nome}`,
+        os_id: os.id
       });
       if (finError) throw finError;
 
@@ -217,7 +220,8 @@ export default function CalendarioPage() {
       if (custoMat > 0) {
         const { error: despError } = await supabase.from('financeiro').insert({
           tipo: 'despesa', categoria: 'peca', valor: custoMat,
-          descricao: `Custo de materiais - O.S. de ${os.cliente?.nome}`
+          descricao: `Custo de materiais - O.S. de ${os.cliente?.nome}`,
+          os_id: os.id
         });
         if (despError) throw despError;
       }
